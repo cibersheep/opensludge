@@ -1,0 +1,342 @@
+name: Build
+
+on:
+  push:
+    branches: ['**']
+    tags: ['v*']
+  pull_request:
+  workflow_dispatch:
+
+env:
+  # The data file of Out Of Order, from the Ubuntu archive. The game is
+  # freeware, and anyone may give it away together with its readme and
+  # licence.
+  OOO_DEB_URL: http://archive.ubuntu.com/ubuntu/pool/multiverse/o/out-of-order/out-of-order_1.0-3_all.deb
+  OOO_DEB_SHA256: fcf4e47f947d767ce55b4be718b0c10e591fdf1a8bc99e884f7e3e988e757a4f
+
+jobs:
+  linux:
+    name: Linux
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install dependencies
+        run: |
+          sudo apt-get update
+          # Ubuntu 24.04 has no SDL3 package, so we build SDL from source, with
+          # the X11, Wayland and audio headers below.
+          sudo apt-get install -y --no-install-recommends \
+            cmake ninja-build pkg-config \
+            libvorbis-dev libogg-dev libpng-dev libdumb1-dev libvpx-dev \
+            libgl-dev libegl-dev libx11-dev libxext-dev libxrandr-dev libxcursor-dev \
+            libxi-dev libxfixes-dev libxss-dev libxtst-dev libwayland-dev \
+            libxkbcommon-dev wayland-protocols libpulse-dev libasound2-dev \
+            xvfb xauth libgl1-mesa-dri
+
+      - name: Build
+        run: |
+          cmake -S . -B build -G Ninja -DCMAKE_BUILD_TYPE=Release
+          cmake --build build
+
+      - name: Test
+        run: ctest --test-dir build --output-on-failure
+
+      - name: Play the opening of Out Of Order
+        run: |
+          curl -fsSL -o ooo.deb "$OOO_DEB_URL"
+          echo "$OOO_DEB_SHA256  ooo.deb" | sha256sum -c -
+          dpkg-deb -x ooo.deb ooo
+          export HOME=$PWD/home SDL_AUDIO_DRIVER=dummy LIBGL_ALWAYS_SOFTWARE=1
+          mkdir -p "$HOME"
+          # After 15 seconds, the engine must still be running, which means
+          # that there was no fatal error.
+          set +e
+          timeout 15 xvfb-run -a -s "-screen 0 1280x1024x24" \
+            build/sludge-engine -w -d1 ooo/usr/share/out-of-order/gamedata > engine.log 2>&1
+          status=$?
+          set -e
+          tail -n 20 engine.log
+          if [ $status -ne 124 ]; then
+            echo "The engine exited early with status $status"
+            exit 1
+          fi
+
+  windows:
+    name: Windows
+    runs-on: windows-2022
+    defaults:
+      run:
+        shell: msys2 {0}
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: msys2/setup-msys2@v2
+        with:
+          msystem: UCRT64
+          update: true
+          install: >-
+            mingw-w64-ucrt-x86_64-toolchain
+            mingw-w64-ucrt-x86_64-cmake
+            mingw-w64-ucrt-x86_64-ninja
+            mingw-w64-ucrt-x86_64-nasm
+            make
+            diffutils
+            perl
+            git
+            zip
+
+      - name: Build
+        run: |
+          cmake -S . -B build -G Ninja -DCMAKE_BUILD_TYPE=Release -DSLUDGE_BUNDLED_DEPS=ON
+          cmake --build build
+
+      - name: Test
+        run: ctest --test-dir build --output-on-failure
+
+      - name: Check the executable
+        run: |
+          # We link dynamically to DLLs that are part of Windows only.
+          objdump -p build/sludge-engine.exe | grep "DLL Name"
+          if objdump -p build/sludge-engine.exe | grep "DLL Name" | grep -i -v -E \
+            'Name: (advapi32|comdlg32|gdi32|imm32|kernel32|msvcrt|ole32|oleaut32|opengl32|setupapi|shell32|user32|version|winmm|ucrtbase|api-ms-win-[a-z0-9-]+)\.dll'; then
+            echo "Unexpected DLL"
+            exit 1
+          fi
+
+      - name: Make the zips
+        run: |
+          version=$(sed -n 's/^project(OpenSLUDGE VERSION \([0-9.]*\).*/\1/p' CMakeLists.txt)
+          if [[ "$GITHUB_REF" == refs/tags/v* ]]; then version=${GITHUB_REF#refs/tags/v}; fi
+
+          curl -fsSL -o ooo.deb "$OOO_DEB_URL"
+          echo "$OOO_DEB_SHA256  ooo.deb" | sha256sum -c -
+          mkdir ooo
+          (cd ooo && ar x ../ooo.deb data.tar.xz && tar -xf data.tar.xz)
+
+          mkdir -p stage/OpenSLUDGE "stage/Out Of Order/Documentation" dist
+          strip build/sludge-engine.exe
+          cp build/sludge-engine.exe stage/OpenSLUDGE/OpenSLUDGE.exe
+          cp packaging/windows/README-Windows.txt stage/OpenSLUDGE/README.txt
+          cp build/sludge-engine.exe "stage/Out Of Order/Out Of Order.exe"
+          cp ooo/usr/share/out-of-order/gamedata "stage/Out Of Order/gamedata"
+          cp ooo/usr/share/doc/out-of-order/*.html "stage/Out Of Order/Documentation/"
+          cp ooo/usr/share/doc/out-of-order/copyright "stage/Out Of Order/Documentation/LICENSE.txt"
+          cp packaging/windows/README-Windows.txt "stage/Out Of Order/README.txt"
+
+          (cd stage && zip -r -9 ../dist/OpenSLUDGE-$version-windows-x64.zip OpenSLUDGE)
+          (cd stage && zip -r -9 "../dist/OutOfOrder-$version-windows-x64.zip" "Out Of Order")
+          ls -la dist
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: windows-zips
+          path: dist/*.zip
+          if-no-files-found: error
+
+  macos:
+    name: macOS (${{ matrix.arch }})
+    runs-on: macos-15
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - arch: arm64
+            min_macos: '11.0'
+          - arch: x86_64
+            min_macos: '10.13'
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install build tools
+        # We assemble the x86 SIMD code of libvpx with nasm.
+        run: brew install nasm ninja
+
+      - name: Build
+        run: |
+          cmake -S . -B build -G Ninja -DCMAKE_BUILD_TYPE=Release \
+            -DSLUDGE_BUNDLED_DEPS=ON \
+            -DCMAKE_OSX_ARCHITECTURES=${{ matrix.arch }} \
+            -DCMAKE_OSX_DEPLOYMENT_TARGET=${{ matrix.min_macos }}
+          cmake --build build
+
+      - name: Test
+        run: ctest --test-dir build --output-on-failure
+
+      - name: Check the executable
+        run: |
+          file build/sludge-engine
+          otool -L build/sludge-engine
+          vtool -show-build build/sludge-engine
+          # We link dynamically to system libraries only.
+          if otool -L build/sludge-engine | tail -n +2 | grep -v -E '^\s+(/usr/lib/|/System/Library/)'; then
+            echo "Unexpected non-system library"
+            exit 1
+          fi
+          # On the Apple Silicon runner, we run the Intel build with Rosetta.
+          arch -${{ matrix.arch }} build/sludge-engine --help
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: sludge-engine-macos-${{ matrix.arch }}
+          path: build/sludge-engine
+          if-no-files-found: error
+
+  macos-package:
+    name: macOS apps
+    needs: macos
+    runs-on: macos-15
+    env:
+      MACOS_CERTIFICATE_P12_BASE64: ${{ secrets.MACOS_CERTIFICATE_P12_BASE64 }}
+      MACOS_CERTIFICATE_PASSWORD: ${{ secrets.MACOS_CERTIFICATE_PASSWORD }}
+      APPLE_API_KEY_P8_BASE64: ${{ secrets.APPLE_API_KEY_P8_BASE64 }}
+      APPLE_API_KEY_ID: ${{ secrets.APPLE_API_KEY_ID }}
+      APPLE_API_ISSUER_ID: ${{ secrets.APPLE_API_ISSUER_ID }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/download-artifact@v4
+        with:
+          pattern: sludge-engine-macos-*
+          path: engines
+
+      - name: Make the universal executable
+        run: |
+          mkdir -p bin/arm64 bin/x86_64 bin/universal
+          cp engines/sludge-engine-macos-arm64/sludge-engine bin/arm64/
+          cp engines/sludge-engine-macos-x86_64/sludge-engine bin/x86_64/
+          lipo -create -output bin/universal/sludge-engine bin/arm64/sludge-engine bin/x86_64/sludge-engine
+          chmod +x bin/*/sludge-engine
+          lipo -info bin/universal/sludge-engine
+
+      - name: Get Out Of Order
+        run: |
+          curl -fsSL -o ooo.deb "$OOO_DEB_URL"
+          echo "$OOO_DEB_SHA256  ooo.deb" | shasum -a 256 -c -
+          mkdir ooo
+          tar -xf ooo.deb -C ooo data.tar.xz
+          tar -xf ooo/data.tar.xz -C ooo
+          mkdir -p ooo-docs
+          cp ooo/usr/share/doc/out-of-order/*.html ooo-docs/
+          cp ooo/usr/share/doc/out-of-order/copyright ooo-docs/LICENSE.txt
+
+      - name: Set up code signing
+        if: env.MACOS_CERTIFICATE_P12_BASE64 != ''
+        run: |
+          keychain=$RUNNER_TEMP/signing.keychain-db
+          keychain_password=$(openssl rand -hex 16)
+          echo "$MACOS_CERTIFICATE_P12_BASE64" | base64 --decode > $RUNNER_TEMP/certificate.p12
+          security create-keychain -p "$keychain_password" "$keychain"
+          security set-keychain-settings -lut 21600 "$keychain"
+          security unlock-keychain -p "$keychain_password" "$keychain"
+          security import $RUNNER_TEMP/certificate.p12 -P "$MACOS_CERTIFICATE_PASSWORD" \
+            -A -t cert -f pkcs12 -k "$keychain"
+          security set-key-partition-list -S apple-tool:,apple: -k "$keychain_password" "$keychain"
+          security list-keychains -d user -s "$keychain" $(security list-keychains -d user | tr -d '"')
+          identity=$(security find-identity -v -p codesigning "$keychain" | grep 'Developer ID Application' | head -n 1 | sed -E 's/.*"(.*)"/\1/')
+          echo "Signing as: $identity"
+          echo "MACOS_SIGNING_IDENTITY=$identity" >> $GITHUB_ENV
+
+      - name: Make the apps
+        run: |
+          version=$(sed -n 's/^project(OpenSLUDGE VERSION \([0-9.]*\).*/\1/p' CMakeLists.txt)
+          if [[ "$GITHUB_REF" == refs/tags/v* ]]; then version=${GITHUB_REF#refs/tags/v}; fi
+          echo "VERSION=$version" >> $GITHUB_ENV
+          export SLUDGE_VERSION=${version%%-*}
+          mkdir -p dist
+          for variant in universal arm64 x86_64; do
+            case $variant in
+              universal) label=macOS-universal; min=10.13 ;;
+              arm64) label=macOS-apple-silicon; min=11.0 ;;
+              x86_64) label=macOS-intel; min=10.13 ;;
+            esac
+
+            out=stage/$variant/OpenSLUDGE
+            mkdir -p "$out"
+            packaging/macos/make-app.sh bin/$variant/sludge-engine "$out/OpenSLUDGE.app" \
+              OpenSLUDGE org.opensludge.engine images/Sludge.icns $min
+            packaging/macos/sign-app.sh "$out/OpenSLUDGE.app"
+            cp packaging/macos/README-macOS.txt "$out/"
+
+            out=stage/$variant/"Out Of Order"
+            mkdir -p "$out"
+            packaging/macos/make-app.sh bin/$variant/sludge-engine "$out/Out Of Order.app" \
+              "Out Of Order" org.opensludge.outoforder images/gameicon.icns $min \
+              ooo/usr/share/out-of-order/gamedata ooo-docs
+            packaging/macos/sign-app.sh "$out/Out Of Order.app"
+            cp -R ooo-docs "$out/Documentation"
+            cp packaging/macos/README-macOS.txt "$out/"
+
+            (cd stage/$variant && ditto -c -k --keepParent OpenSLUDGE ../../dist/OpenSLUDGE-$version-$label.zip)
+            (cd stage/$variant && ditto -c -k --keepParent "Out Of Order" ../../dist/OutOfOrder-$version-$label.zip)
+          done
+          ls -la dist
+
+      - name: Notarise
+        if: env.MACOS_SIGNING_IDENTITY != '' && env.APPLE_API_KEY_P8_BASE64 != ''
+        run: |
+          echo "$APPLE_API_KEY_P8_BASE64" | base64 --decode > $RUNNER_TEMP/api_key.p8
+          for zip in dist/*.zip; do
+            xcrun notarytool submit "$zip" --wait \
+              --key $RUNNER_TEMP/api_key.p8 --key-id "$APPLE_API_KEY_ID" --issuer "$APPLE_API_ISSUER_ID"
+          done
+          # Staple the notarisation tickets to the apps, and zip them again.
+          rm dist/*.zip
+          for variant in universal arm64 x86_64; do
+            case $variant in
+              universal) label=macOS-universal ;;
+              arm64) label=macOS-apple-silicon ;;
+              x86_64) label=macOS-intel ;;
+            esac
+            xcrun stapler staple stage/$variant/OpenSLUDGE/OpenSLUDGE.app
+            xcrun stapler staple "stage/$variant/Out Of Order/Out Of Order.app"
+            (cd stage/$variant && ditto -c -k --keepParent OpenSLUDGE ../../dist/OpenSLUDGE-$VERSION-$label.zip)
+            (cd stage/$variant && ditto -c -k --keepParent "Out Of Order" ../../dist/OutOfOrder-$VERSION-$label.zip)
+          done
+
+      - name: Check the apps
+        run: |
+          for app in stage/*/OpenSLUDGE/OpenSLUDGE.app "stage/universal/Out Of Order/Out Of Order.app"; do
+            codesign --verify --strict --verbose=2 "$app"
+            "$app/Contents/MacOS/sludge-engine" --help > /dev/null
+          done
+          lipo -info "stage/universal/Out Of Order/Out Of Order.app/Contents/MacOS/sludge-engine"
+          spctl --assess --type execute --verbose "stage/universal/OpenSLUDGE/OpenSLUDGE.app" || \
+            echo "(Gatekeeper only accepts notarised apps)"
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: macos-apps
+          path: dist/*.zip
+          if-no-files-found: error
+
+  release:
+    name: Publish the release
+    if: startsWith(github.ref, 'refs/tags/v')
+    needs: [linux, windows, macos-package]
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/download-artifact@v4
+        with:
+          name: macos-apps
+          path: dist
+
+      - uses: actions/download-artifact@v4
+        with:
+          name: windows-zips
+          path: dist
+
+      - name: Publish
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          tag=${GITHUB_REF#refs/tags/}
+          prerelease=
+          if [[ "$tag" == *-* ]]; then prerelease=--prerelease; fi
+          ls -la dist
+          gh release create "$tag" dist/*.zip --repo "$GITHUB_REPOSITORY" \
+            --title "OpenSLUDGE ${tag#v}" --notes-file packaging/RELEASE_NOTES.md $prerelease
