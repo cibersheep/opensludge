@@ -8,8 +8,9 @@ set(CMAKE_CXX_EXTENSIONS OFF)
 
 option(SLUDGE_GLES2 "Render with OpenGL ES 2.0 instead of desktop OpenGL" OFF)
 
+find_package(SDL3 REQUIRED CONFIG)
 find_package(PkgConfig REQUIRED)
-pkg_check_modules(ENGINE REQUIRED IMPORTED_TARGET sdl alure>=1.1 openal vorbis ogg vpx libpng)
+pkg_check_modules(ENGINE REQUIRED IMPORTED_TARGET alure>=1.1 openal vorbis ogg vpx libpng)
 find_path(DUMB_INCLUDE_DIR dumb.h REQUIRED)
 find_library(DUMB_LIBRARY dumb REQUIRED)
 
@@ -21,15 +22,12 @@ set(ENGINE_SOURCES
 	fileset.cpp floor.cpp fonttext.cpp freeze.cpp graphics.cpp helpers.cpp
 	language.cpp line.cpp linuxstuff.cpp loadsave.cpp main.cpp
 	memwatch.cpp moreio.cpp movie.cpp newfatal.cpp objtypes.cpp people.cpp
-	region.cpp savedata.cpp shaders.cpp sludger.cpp sprbanks.cpp
+	region.cpp savedata.cpp shaders.cpp sludge_gl.cpp sludger.cpp sprbanks.cpp
 	sprites.cpp statusba.cpp stringy.cpp talk.cpp
 	thumbnail.cpp timing.cpp transition.cpp variable.cpp
 	zbuffer.cpp sound_openal.cpp
 	libwebm/mkvparser.cpp libwebm/mkvreader.cpp
 )
-if(SLUDGE_GLES2)
-	list(APPEND ENGINE_SOURCES eglport/eglport.cpp)
-endif()
 list(TRANSFORM ENGINE_SOURCES PREPEND ${ENGINE_DIR}/)
 list(APPEND ENGINE_SOURCES ${COMMON_DIR}/utf8.cpp)
 
@@ -45,19 +43,18 @@ list(TRANSFORM SHADERS PREPEND ${ENGINE_DIR}/)
 add_executable(sludge-engine ${ENGINE_SOURCES})
 
 target_include_directories(sludge-engine PRIVATE ${COMMON_DIR} ${ENGINE_DIR}/libwebm ${DUMB_INCLUDE_DIR})
-target_link_libraries(sludge-engine PRIVATE PkgConfig::ENGINE ${DUMB_LIBRARY})
+target_link_libraries(sludge-engine PRIVATE SDL3::SDL3 PkgConfig::ENGINE ${DUMB_LIBRARY})
 
 include(GNUInstallDirs)
 # We load the shaders from this folder at run time.
 target_compile_definitions(sludge-engine PRIVATE DATADIR="${CMAKE_INSTALL_FULL_DATADIR}/sludge/")
 
 if(SLUDGE_GLES2)
-	target_compile_definitions(sludge-engine PRIVATE HAVE_GLES2 USE_EGL_SDL USE_GLES2)
-	target_link_libraries(sludge-engine PRIVATE GLESv2 EGL X11)
+	target_compile_definitions(sludge-engine PRIVATE HAVE_GLES2)
+	target_link_libraries(sludge-engine PRIVATE GLESv2)
 else()
 	find_package(OpenGL REQUIRED)
-	pkg_check_modules(GLEW REQUIRED IMPORTED_TARGET glew glu)
-	target_link_libraries(sludge-engine PRIVATE OpenGL::GL PkgConfig::GLEW)
+	target_link_libraries(sludge-engine PRIVATE OpenGL::GL)
 endif()
 
 install(TARGETS sludge-engine RUNTIME DESTINATION ${CMAKE_INSTALL_BINDIR})
