@@ -12,9 +12,6 @@ exists, libgl-dev, libvorbis-dev, libpng-dev, libdumb1-dev and libvpx-dev.
 
    With -DSLUDGE_GLES2=ON, we draw with OpenGL ES 2.0 instead of OpenGL.
 
-   Install the engine with `cmake --install build'. We load the shaders
-from the data folder of the installation.
-
    Run the engine with the game data file as its argument, for example
 `sludge-engine gamedata.slg'. Run `sludge-engine --help' for the options.
 
