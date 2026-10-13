@@ -6,7 +6,7 @@ sludge_floormaker_SOURCES = \
 	FloorMakerMain.cpp SludgeFloorMaker.cpp SludgeFloorMaker.h \
 	SludgeGLApplication.cpp SludgeGLApplication.h \
 	SludgeApplication.cpp SludgeApplication.h \
-	Common.cpp Common.h ../source/DevKit/Common/interface.h \
+	Common.cpp Common.h GLCompat.cpp GLCompat.h ../source/DevKit/Common/interface.h \
 	../source/DevKit/GraphicalTools/floormaker.cpp ../source/DevKit/GraphicalTools/floormaker.h \
 	../source/DevKit/GraphicalTools/sprites.cpp ../source/DevKit/GraphicalTools/sprites.h \
 	../source/DevKit/Common/moreio.cpp ../source/DevKit/Common/moreio.h \
@@ -19,7 +19,7 @@ sludge_zbuffermaker_SOURCES = \
 	ZBufferMakerMain.cpp SludgeZBufferMaker.cpp SludgeZBufferMaker.h \
 	SludgeGLApplication.cpp SludgeGLApplication.h \
 	SludgeApplication.cpp SludgeApplication.h \
-	Common.cpp Common.h ../source/DevKit/Common/interface.h \
+	Common.cpp Common.h GLCompat.cpp GLCompat.h ../source/DevKit/Common/interface.h \
 	../source/DevKit/GraphicalTools/zbuffer.cpp ../source/DevKit/GraphicalTools/zbuffer.h \
 	../source/DevKit/GraphicalTools/sprites.cpp ../source/DevKit/GraphicalTools/sprites.h \
 	../source/DevKit/Common/moreio.cpp ../source/DevKit/Common/moreio.h \
@@ -32,7 +32,7 @@ sludge_spritebankeditor_SOURCES = \
 	SpriteBankEditorMain.cpp SludgeSpriteBankEditor.cpp SludgeSpriteBankEditor.h \
 	SludgeGLApplication.cpp SludgeGLApplication.h \
 	SludgeApplication.cpp SludgeApplication.h \
-	Common.cpp Common.h ../source/DevKit/Common/interface.h \
+	Common.cpp Common.h GLCompat.cpp GLCompat.h ../source/DevKit/Common/interface.h \
 	../source/DevKit/GraphicalTools/sprites.cpp ../source/DevKit/GraphicalTools/sprites.h \
 	../source/DevKit/Common/moreio.cpp ../source/DevKit/Common/moreio.h \
 	../source/DevKit/Common/helpers.cpp ../source/DevKit/Common/helpers.h \
@@ -143,7 +143,7 @@ EXTRA_DIST = \
 	../images/floorIcon/floorIcon.ico ../images/zIcon/zIcon.ico \
 	../images/spriteIcon/spriteIcon.ico ../images/ProjIcon/ProjIcon.ico
 
-AM_CPPFLAGS = -I$(top_srcdir)/source/CommonCode -I$(top_srcdir)/source/DevKit/Common -I$(top_srcdir)/source/DevKit/Compiler -I$(top_srcdir)/source/DevKit/ProjectManager -I$(top_srcdir)/source/DevKit/GraphicalTools -I$(top_srcdir)/source/DevKit/TranslationEditor @GTK_CFLAGS@ @LIBPNG_CFLAGS@ @GLEW_CFLAGS@
+AM_CPPFLAGS = -I$(srcdir) -I$(top_srcdir)/source/CommonCode -I$(top_srcdir)/source/DevKit/Common -I$(top_srcdir)/source/DevKit/Compiler -I$(top_srcdir)/source/DevKit/ProjectManager -I$(top_srcdir)/source/DevKit/GraphicalTools -I$(top_srcdir)/source/DevKit/TranslationEditor @GTK_CFLAGS@ @LIBPNG_CFLAGS@ @EPOXY_CFLAGS@
 
 if COND_WIN32
 AM_CPPFLAGS += \
@@ -153,9 +153,9 @@ AM_CPPFLAGS += \
 AM_LDFLAGS = \
 	-Wl,-subsystem,windows
 
-sludge_floormaker_LDADD = FloorMakerResources.o @GTK_LIBS@ @LIBPNG_LIBS@ @GLEW_LIBS@
-sludge_zbuffermaker_LDADD = ZBufferMakerResources.o @GTK_LIBS@ @LIBPNG_LIBS@ @GLEW_LIBS@
-sludge_spritebankeditor_LDADD = SpriteBankEditorResources.o @GTK_LIBS@ @LIBPNG_LIBS@ @GLEW_LIBS@
+sludge_floormaker_LDADD = FloorMakerResources.o @GTK_LIBS@ @LIBPNG_LIBS@ @EPOXY_LIBS@
+sludge_zbuffermaker_LDADD = ZBufferMakerResources.o @GTK_LIBS@ @LIBPNG_LIBS@ @EPOXY_LIBS@
+sludge_spritebankeditor_LDADD = SpriteBankEditorResources.o @GTK_LIBS@ @LIBPNG_LIBS@ @EPOXY_LIBS@
 sludge_translationeditor_LDADD = TranslationEditorResources.o @GTK_LIBS@ @LIBPNG_LIBS@
 sludge_projectmanager_LDADD = ProjectManagerResources.o @GTK_LIBS@ @LIBPNG_LIBS@
 else
@@ -163,9 +163,14 @@ AM_CPPFLAGS += \
 	-std=c++0x \
 	-DDATADIR='"$(pkgdatadir)/"'
 
-sludge_floormaker_LDADD = @GTK_LIBS@ @LIBPNG_LIBS@ @GLEW_LIBS@
-sludge_zbuffermaker_LDADD = @GTK_LIBS@ @LIBPNG_LIBS@ @GLEW_LIBS@
-sludge_spritebankeditor_LDADD = @GTK_LIBS@ @LIBPNG_LIBS@ @GLEW_LIBS@
+# GtkBuilder resolves the signal handlers in the .glade files by name at run
+# time, so the handler symbols have to be exported from the executables.
+AM_LDFLAGS = \
+	-Wl,--export-dynamic
+
+sludge_floormaker_LDADD = @GTK_LIBS@ @LIBPNG_LIBS@ @EPOXY_LIBS@
+sludge_zbuffermaker_LDADD = @GTK_LIBS@ @LIBPNG_LIBS@ @EPOXY_LIBS@
+sludge_spritebankeditor_LDADD = @GTK_LIBS@ @LIBPNG_LIBS@ @EPOXY_LIBS@
 sludge_translationeditor_LDADD = @GTK_LIBS@ @LIBPNG_LIBS@
 sludge_projectmanager_LDADD = @GTK_LIBS@ @LIBPNG_LIBS@
 endif

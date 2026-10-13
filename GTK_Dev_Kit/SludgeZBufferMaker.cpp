@@ -24,8 +24,8 @@
 #include <glib-object.h>
 #include <glib.h>
 
-#define GL_GLEXT_PROTOTYPES
-#include <GL/glew.h>
+#include <epoxy/gl.h>
+#include "GLCompat.h"
 
 #include <errno.h>
 #include <sys/types.h>
@@ -47,8 +47,6 @@ SludgeZBufferMaker::SludgeZBufferMaker()
 	theSliderAdjustment = GTK_ADJUSTMENT (gtk_builder_get_object(theXml, "slider_adjustment"));
 	theYAdjustment = GTK_ADJUSTMENT (gtk_builder_get_object(theXml, "y_adjustment"));
 	theNumBuffersLabel = GTK_LABEL (gtk_builder_get_object(theXml, "num_buffers_label"));
-	saveItem = GTK_WIDGET (gtk_builder_get_object(theXml, "save"));
-	saveAsItem = GTK_WIDGET (gtk_builder_get_object(theXml, "save_as"));
 
     init(TRUE);
 	setupButtons();
@@ -147,13 +145,13 @@ void SludgeZBufferMaker::postNew()
 
 	if (currentFolder[0] != 0)
 	{
-		gtk_file_chooser_set_current_folder(GTK_FILE_CHOOSER (dialog), currentFolder);
+		fileChooserSetCurrentFolder(GTK_FILE_CHOOSER (dialog), currentFolder);
 	}
 
-	if (gtk_dialog_run(GTK_DIALOG (dialog)) == GTK_RESPONSE_ACCEPT)
+	if (runDialog(GTK_DIALOG (dialog)) == GTK_RESPONSE_ACCEPT)
 	{
 		char *filename;
-		filename = gtk_file_chooser_get_filename(GTK_FILE_CHOOSER (dialog));
+		filename = fileChooserGetFilename(GTK_FILE_CHOOSER (dialog));
 		flipBackslashes(&filename);
 
 		if (!loadZBufferFromTGA(filename, &backdrop))
@@ -162,7 +160,7 @@ void SludgeZBufferMaker::postNew()
 		} else {
 			setFolderFromFilename(filename);
 			setFilename(filename);
-			int i, lastSlash;
+			int i, lastSlash = 0;
 			for (i = 0; filename[i] != 0; i++)
 			{
 				if (filename[i] == '/')
@@ -179,7 +177,7 @@ void SludgeZBufferMaker::postNew()
 
 		g_free(filename);
 	}
-	gtk_widget_destroy(dialog);
+	gtk_window_destroy(GTK_WINDOW (dialog));
 
 	setupButtons();
 }
@@ -271,13 +269,8 @@ void SludgeZBufferMaker::drawRect()
 
 void SludgeZBufferMaker::setupButtons()
 {
-	if (backdrop.total > 0) {
-		gtk_widget_set_sensitive(saveItem, TRUE);
-		gtk_widget_set_sensitive(saveAsItem, TRUE);
-	} else {
-		gtk_widget_set_sensitive(saveItem, FALSE);
-		gtk_widget_set_sensitive(saveAsItem, FALSE);
-	}
+	setActionEnabled("save", backdrop.total > 0);
+	setActionEnabled("save-as", backdrop.total > 0);
 }
 
 struct spriteBank * SludgeZBufferMaker::getBackdrop()
@@ -310,7 +303,7 @@ void SludgeZBufferMaker::setBuffer(int i)
 
 // Callbacks:
 
-void SludgeZBufferMaker::on_hscale_value_changed(GtkHScale *theScale)
+void SludgeZBufferMaker::on_hscale_value_changed(GtkScale *theScale)
 {
 //	if (buffer() > 0)
 //		[bufferYTextField setEnabled:YES];

@@ -30,6 +30,89 @@
 
 gint message_dialog( GtkMessageType type, const gchar *title, const gchar *message);
 
+static GMainLoop *theMainLoop = NULL;
+
+struct dialogRunData {
+	GMainLoop *loop;
+	gint response;
+};
+
+static void on_dialog_response(GtkDialog *dialog, gint response_id, gpointer user_data)
+{
+	struct dialogRunData *data = (struct dialogRunData *) user_data;
+	data->response = response_id;
+	g_main_loop_quit(data->loop);
+}
+
+/*
+ * GTK 4 removed gtk_dialog_run(). Run a nested main loop until the dialog emits
+ * "response", so that the callers can keep working synchronously.
+ */
+int runDialog(GtkDialog *dialog)
+{
+	struct dialogRunData data;
+	data.response = GTK_RESPONSE_NONE;
+	data.loop = g_main_loop_new(NULL, FALSE);
+	g_signal_connect(dialog, "response", G_CALLBACK(on_dialog_response), &data);
+	gtk_window_present(GTK_WINDOW(dialog));
+	g_main_loop_run(data.loop);
+	g_main_loop_unref(data.loop);
+	return data.response;
+}
+
+/*
+ * GTK 4 removed gtk_main() / gtk_main_quit().
+ */
+void runMainLoop(GtkWidget *window)
+{
+	if (window != NULL)
+		gtk_window_present(GTK_WINDOW(window));
+
+	theMainLoop = g_main_loop_new(NULL, FALSE);
+	g_main_loop_run(theMainLoop);
+	g_main_loop_unref(theMainLoop);
+	theMainLoop = NULL;
+}
+
+void quitMainLoop(void)
+{
+	if (theMainLoop != NULL)
+		g_main_loop_quit(theMainLoop);
+}
+
+char * fileChooserGetFilename(GtkFileChooser *theChooser)
+{
+	GFile *file = gtk_file_chooser_get_file(theChooser);
+	if (file == NULL) return NULL;
+	char *path = g_file_get_path(file);
+	g_object_unref(file);
+	return path;
+}
+
+GSList * fileChooserGetFilenames(GtkFileChooser *theChooser)
+{
+	GSList *list = NULL;
+	GListModel *model = gtk_file_chooser_get_files(theChooser);
+	if (model != NULL) {
+		guint n = g_list_model_get_n_items(model);
+		for (guint i = 0; i < n; i++) {
+			GFile *file = G_FILE(g_list_model_get_item(model, i));
+			char *path = g_file_get_path(file);
+			if (path != NULL) list = g_slist_append(list, path);
+			g_object_unref(file);
+		}
+		g_object_unref(model);
+	}
+	return list;
+}
+
+void fileChooserSetCurrentFolder(GtkFileChooser *theChooser, const char *folder)
+{
+	GFile *file = g_file_new_for_path(folder);
+	gtk_file_chooser_set_current_folder(theChooser, file, NULL);
+	g_object_unref(file);
+}
+
 bool askAQuestion (const char * head, const char * msg)
 {
 	gint response;
@@ -64,9 +147,9 @@ message_dialog(GtkMessageType type, const gchar *title, const gchar *message)
 						"%s", message);
                         
 	gtk_window_set_title(GTK_WINDOW(dialog), title);
-	response = gtk_dialog_run (GTK_DIALOG (dialog));
-	gtk_widget_destroy (dialog);   
-        
+	response = runDialog (GTK_DIALOG (dialog));
+	gtk_window_destroy (GTK_WINDOW (dialog));
+
 	return response;
 }
 

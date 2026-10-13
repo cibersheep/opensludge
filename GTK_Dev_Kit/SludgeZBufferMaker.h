@@ -30,8 +30,6 @@ private:
 	GtkAdjustment *theYAdjustment;
 	GtkLabel *theNumBuffersLabel;
 
-	GtkWidget *saveItem, *saveAsItem;
-
 	int mouseLoc1x, mouseLoc1y;
 
 
@@ -65,6 +63,6 @@ private:
 public:
 	SludgeZBufferMaker();
 	// Callbacks:
-	void on_hscale_value_changed(GtkHScale *theScale);
+	void on_hscale_value_changed(GtkScale *theScale);
 	void on_spinbutton_value_changed(GtkSpinButton *theSpinButton);
 };

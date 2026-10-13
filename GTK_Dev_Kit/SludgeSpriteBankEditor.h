@@ -31,7 +31,7 @@ private:
 	GtkAdjustment *theSliderAdjustment;
 	GtkAdjustment *theXAdjustment, *theYAdjustment;
 	GtkLabel *theNumSpritesLabel;
-	GtkToggleButton *modePalButton[3];
+	GtkCheckButton *modePalButton[3];
 	GtkWidget *insertButton, *deleteButton, *replaceButton, *exportButton, *centreButton, *baseButton, *multiButton;
 	GtkWidget *showBoxButton, *xSpinButton, *ySpinButton;
 	GtkDialog *fontifyDialog, *multiDialog;
@@ -80,7 +80,7 @@ public:
 	SludgeSpriteBankEditor();
 	~SludgeSpriteBankEditor();
 	// Callbacks:
-	void on_show_box_toggled(GtkToggleButton *theButton);
+	void on_show_box_toggled(GtkCheckButton *theButton);
 	void on_x_spinbutton_value_changed();
 	void on_y_spinbutton_value_changed();
 	void on_centre_hotspot_clicked();

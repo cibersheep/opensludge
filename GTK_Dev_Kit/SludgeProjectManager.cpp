@@ -67,11 +67,6 @@ SludgeProjectManager::SludgeProjectManager()
 	filesSelection = NULL;
 
 	notebook = GTK_NOTEBOOK (gtk_builder_get_object(theXml, "notebook"));
-	saveItem = GTK_WIDGET (gtk_builder_get_object(theXml, "save"));
-	saveAsItem = GTK_WIDGET (gtk_builder_get_object(theXml, "save_as"));
-	projectPropertiesItem = GTK_WIDGET (gtk_builder_get_object(theXml, "project_properties"));
-	projectCompileItem = GTK_WIDGET (gtk_builder_get_object(theXml, "project_compile"));
-	projectRunGameItem = GTK_WIDGET (gtk_builder_get_object(theXml, "project_run_game"));
 	addFileButton = GTK_WIDGET (gtk_builder_get_object(theXml, "add_file"));
 	removeFileButton = GTK_WIDGET (gtk_builder_get_object(theXml, "remove_file"));
 
@@ -100,12 +95,12 @@ SludgeProjectManager::SludgeProjectManager()
 	prefWidth = GTK_SPIN_BUTTON (gtk_builder_get_object(theXml, "pref_width"));
 	prefHeight = GTK_SPIN_BUTTON (gtk_builder_get_object(theXml, "pref_height"));
 	prefSpeed = GTK_SPIN_BUTTON (gtk_builder_get_object(theXml, "pref_speed"));
-	prefSilent = GTK_TOGGLE_BUTTON (gtk_builder_get_object(theXml, "pref_silent"));
+	prefSilent = GTK_CHECK_BUTTON (gtk_builder_get_object(theXml, "pref_silent"));
 
 	preferenceDialog = GTK_DIALOG (gtk_builder_get_object(theXml, "preferences_dialog"));
-	prefKeepImages = GTK_TOGGLE_BUTTON (gtk_builder_get_object(theXml, "pref_keep_images"));
-	prefWriteStrings = GTK_TOGGLE_BUTTON (gtk_builder_get_object(theXml, "pref_write_strings"));
-	prefVerbose = GTK_TOGGLE_BUTTON (gtk_builder_get_object(theXml, "pref_verbose"));
+	prefKeepImages = GTK_CHECK_BUTTON (gtk_builder_get_object(theXml, "pref_keep_images"));
+	prefWriteStrings = GTK_CHECK_BUTTON (gtk_builder_get_object(theXml, "pref_write_strings"));
+	prefVerbose = GTK_CHECK_BUTTON (gtk_builder_get_object(theXml, "pref_verbose"));
 	prefEditor = GTK_ENTRY (gtk_builder_get_object(theXml, "pref_editor"));
 	prefImageViewer = GTK_ENTRY (gtk_builder_get_object(theXml, "pref_image_viewer"));
 	prefAudioPlayer = GTK_ENTRY (gtk_builder_get_object(theXml, "pref_audio_player"));
@@ -173,7 +168,7 @@ void SludgeProjectManager::postOpen()
 {
 	listChanged(FILE_TREEVIEW);
 	setupButtons();
-	gtk_widget_set_sensitive(projectRunGameItem, FALSE);
+	setActionEnabled("comp-gamebutton", FALSE);
 }
 
 void SludgeProjectManager::postNew()
@@ -188,7 +183,6 @@ void SludgeProjectManager::postNew()
 				      "_Cancel", GTK_RESPONSE_CANCEL,
 				      "_Save", GTK_RESPONSE_ACCEPT,
 				      NULL);
-	gtk_file_chooser_set_do_overwrite_confirmation(GTK_FILE_CHOOSER (dialog), TRUE);
 
 	filter = gtk_file_filter_new();
 	gtk_file_filter_set_name(filter, getFilterName());
@@ -199,20 +193,20 @@ void SludgeProjectManager::postNew()
 
 	if (currentFolder[0] != 0)
 	{
-		gtk_file_chooser_set_current_folder(GTK_FILE_CHOOSER (dialog), currentFolder);
+		fileChooserSetCurrentFolder(GTK_FILE_CHOOSER (dialog), currentFolder);
 	}
 
-	if (gtk_dialog_run(GTK_DIALOG (dialog)) == GTK_RESPONSE_ACCEPT)
+	if (runDialog(GTK_DIALOG (dialog)) == GTK_RESPONSE_ACCEPT)
 	{
 		char *filename;
-		filename = gtk_file_chooser_get_filename(GTK_FILE_CHOOSER (dialog));
+		filename = fileChooserGetFilename(GTK_FILE_CHOOSER (dialog));
 		flipBackslashes(&filename);
 
 		doNewProject(filename, fileList, &fileListNum);
 		listChanged(FILE_TREEVIEW);
 		listChanged(RESOURCE_TREEVIEW);
 		gtk_list_store_clear(errorsListStore);
-		gtk_widget_set_sensitive(projectRunGameItem, FALSE);
+		setActionEnabled("comp-gamebutton", FALSE);
 
 		setFilename(filename);
 		setFolderFromFilename(filename);
@@ -220,7 +214,7 @@ void SludgeProjectManager::postNew()
 		g_free(filename);
 		success = TRUE;
 	}
-	gtk_widget_destroy(dialog);
+	gtk_window_destroy(GTK_WINDOW (dialog));
 
 	if (success)
 		on_project_settings();
@@ -231,22 +225,22 @@ void SludgeProjectManager::postNew()
 void SludgeProjectManager::setupButtons()
 {
 	if (currentFilename[0] == 0) {
-		gtk_widget_set_sensitive(saveItem, FALSE);
-		gtk_widget_set_sensitive(saveAsItem, FALSE);
-		gtk_widget_set_sensitive(projectPropertiesItem, FALSE);
+		setActionEnabled("save", FALSE);
+		setActionEnabled("save-as", FALSE);
+		setActionEnabled("project-settings", FALSE);
 		gtk_widget_set_sensitive(addFileButton, FALSE);
 		gtk_widget_set_sensitive(removeFileButton, FALSE);
 	} else {
-		gtk_widget_set_sensitive(saveItem, TRUE);
-		gtk_widget_set_sensitive(saveAsItem, TRUE);
-		gtk_widget_set_sensitive(projectPropertiesItem, TRUE);
+		setActionEnabled("save", TRUE);
+		setActionEnabled("save-as", TRUE);
+		setActionEnabled("project-settings", TRUE);
 		gtk_widget_set_sensitive(addFileButton, TRUE);
 	}
 
 	if (fileListNum) {
-		gtk_widget_set_sensitive(projectCompileItem, TRUE);
+		setActionEnabled("compile", TRUE);
 	} else {
-		gtk_widget_set_sensitive(projectCompileItem, FALSE);
+		setActionEnabled("compile", FALSE);
 	}
 }
 
@@ -520,9 +514,9 @@ void SludgeProjectManager::update_compile_window()
 		gtk_widget_set_sensitive(closeCompilerButton, TRUE);
 		if (info->success) {
 			gtk_widget_set_sensitive(runGameButton, TRUE);
-			gtk_widget_set_sensitive(projectRunGameItem, TRUE);
+			setActionEnabled("comp-gamebutton", TRUE);
 		} else {
-			gtk_widget_set_sensitive(projectRunGameItem, FALSE);
+			setActionEnabled("comp-gamebutton", FALSE);
 		}
 	}
 	delete info;
@@ -771,14 +765,14 @@ void SludgeProjectManager::on_add_file_clicked()
 
 	if (currentFolder[0] != 0)
 	{
-		gtk_file_chooser_set_current_folder(GTK_FILE_CHOOSER (dialog), currentFolder);
+		fileChooserSetCurrentFolder(GTK_FILE_CHOOSER (dialog), currentFolder);
 	}
 
-	if (gtk_dialog_run(GTK_DIALOG (dialog)) == GTK_RESPONSE_ACCEPT)
+	if (runDialog(GTK_DIALOG (dialog)) == GTK_RESPONSE_ACCEPT)
 	{
 		GSList *filenames;
 		char *filename;
-		filenames = gtk_file_chooser_get_filenames(GTK_FILE_CHOOSER (dialog));
+		filenames = fileChooserGetFilenames(GTK_FILE_CHOOSER (dialog));
 
 		for (int j = 0; j < g_slist_length(filenames); j++) {
 			filename = (char *) g_slist_nth(filenames, j)->data;
@@ -792,7 +786,7 @@ void SludgeProjectManager::on_add_file_clicked()
 		}
 		g_slist_free(filenames);
 	}
-	gtk_widget_destroy(dialog);
+	gtk_window_destroy(GTK_WINDOW (dialog));
 
 	listChanged(FILE_TREEVIEW);
 }
@@ -839,7 +833,7 @@ void SludgeProjectManager::on_compile()
 
 	gtk_widget_set_sensitive(closeCompilerButton, FALSE);
 	gtk_widget_set_sensitive(runGameButton, FALSE);
-	gtk_widget_show(GTK_WIDGET(compilerDialog));
+	gtk_widget_set_visible(GTK_WIDGET(compilerDialog), TRUE);
 
 	compilerInfoQueue = g_async_queue_new();
 
@@ -849,9 +843,9 @@ void SludgeProjectManager::on_compile()
 void SludgeProjectManager::on_comp_okbutton_clicked(GtkButton *theButton)
 {
 	GtkWidget *theDialog;
-	theDialog = gtk_widget_get_toplevel(GTK_WIDGET(theButton));
+	theDialog = GTK_WIDGET(gtk_widget_get_root(GTK_WIDGET(theButton)));
 
-	gtk_widget_hide(theDialog);
+	gtk_widget_set_visible(theDialog, FALSE);
 }
 
 void SludgeProjectManager::on_comp_gamebutton_clicked()
@@ -897,9 +891,9 @@ void SludgeProjectManager::on_project_settings()
 	gtk_spin_button_set_value(prefWidth, (double)settings.screenWidth);
 	gtk_spin_button_set_value(prefHeight, (double)settings.screenHeight);
 	gtk_spin_button_set_value(prefSpeed, (double)settings.frameSpeed);
-	gtk_toggle_button_set_active(prefSilent, settings.forceSilent);
+	gtk_check_button_set_active(prefSilent, settings.forceSilent);
 
-	if (gtk_dialog_run(projectSettingsDialog) == GTK_RESPONSE_OK)
+	if (runDialog(projectSettingsDialog) == GTK_RESPONSE_OK)
 	{
 		killSettingsStrings();
 		settings.quitMessage = copyString(gtk_entry_get_text(prefQuit));
@@ -912,27 +906,27 @@ void SludgeProjectManager::on_project_settings()
 		settings.screenHeight = gtk_spin_button_get_value_as_int(prefHeight);
 		settings.screenWidth = gtk_spin_button_get_value_as_int(prefWidth);
 		settings.frameSpeed = gtk_spin_button_get_value_as_int(prefSpeed);
-		settings.forceSilent = gtk_toggle_button_get_active(prefSilent);
+		settings.forceSilent = gtk_check_button_get_active(prefSilent);
 		setFileChanged();
 	}
-	gtk_widget_hide(GTK_WIDGET(projectSettingsDialog));
+	gtk_widget_set_visible(GTK_WIDGET(projectSettingsDialog), FALSE);
 }
 
 void SludgeProjectManager::on_preferences()
 {
-	gtk_toggle_button_set_active(prefKeepImages, !programSettings.compilerKillImages);
-	gtk_toggle_button_set_active(prefWriteStrings, programSettings.compilerWriteStrings);
-	gtk_toggle_button_set_active(prefVerbose, programSettings.compilerVerbose);
+	gtk_check_button_set_active(prefKeepImages, !programSettings.compilerKillImages);
+	gtk_check_button_set_active(prefWriteStrings, programSettings.compilerWriteStrings);
+	gtk_check_button_set_active(prefVerbose, programSettings.compilerVerbose);
 	gtk_entry_set_text(prefEditor, editor ? editor : "");
 	gtk_entry_set_text(prefImageViewer, imageViewer ? imageViewer : "");
 	gtk_entry_set_text(prefAudioPlayer, audioPlayer ? audioPlayer : "");
 	gtk_entry_set_text(prefModPlayer, modPlayer ? modPlayer : "");
 
-	if (gtk_dialog_run(preferenceDialog) == GTK_RESPONSE_OK)
+	if (runDialog(preferenceDialog) == GTK_RESPONSE_OK)
 	{
-		programSettings.compilerKillImages = !gtk_toggle_button_get_active(prefKeepImages);
-		programSettings.compilerWriteStrings = gtk_toggle_button_get_active(prefWriteStrings);
-		programSettings.compilerVerbose = gtk_toggle_button_get_active(prefVerbose);
+		programSettings.compilerKillImages = !gtk_check_button_get_active(prefKeepImages);
+		programSettings.compilerWriteStrings = gtk_check_button_get_active(prefWriteStrings);
+		programSettings.compilerVerbose = gtk_check_button_get_active(prefVerbose);
 		sprintf(editor, "%s", gtk_entry_get_text(prefEditor));
 		sprintf(imageViewer, "%s", gtk_entry_get_text(prefImageViewer));
 		sprintf(audioPlayer, "%s", gtk_entry_get_text(prefAudioPlayer));
@@ -940,7 +934,7 @@ void SludgeProjectManager::on_preferences()
 
 		saveIniFile();
 	}
-	gtk_widget_hide(GTK_WIDGET(preferenceDialog));
+	gtk_widget_set_visible(GTK_WIDGET(preferenceDialog), FALSE);
 }
 
 void SludgeProjectManager::on_program_activate(whichProgram program)

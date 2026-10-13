@@ -32,41 +32,9 @@
 SludgeApplication::SludgeApplication(const char * gladeFileName, const char * iconName, const char * configFile)
 {
 	configfile = configFile;
-	GError *err = NULL;
 
+	actionGroup = NULL;
 	initSuccess = TRUE;
-
-	char buf[1000];
-	GdkPixbuf *pixbuf16, *pixbuf32, *pixbuf128, *pixbuf256;
-	GList *list = NULL;
-
-	sprintf(buf, "%s%s_16x16x32.png", DATADIR, iconName);
-	pixbuf16 = gdk_pixbuf_new_from_file (buf, &err);
-
-	if (err == NULL) {
-		sprintf(buf, "%s%s_32x32x32.png", DATADIR, iconName);
-		pixbuf32 = gdk_pixbuf_new_from_file (buf, &err);
-	}
-	if (err == NULL) {
-		sprintf(buf, "%s%s_128x128x32.png", DATADIR, iconName);
-		pixbuf128 = gdk_pixbuf_new_from_file (buf, &err);
-	}
-	if (err == NULL) {
-		sprintf(buf, "%s%s_256x256x32.png", DATADIR, iconName);
-		pixbuf256 = gdk_pixbuf_new_from_file (buf, &err);
-	}
-
-	if (err != NULL)
-	{
-		fprintf (stderr, "Unable to open icon file: %s\n", err->message);
-		g_error_free (err);
-	} else {
-		list = g_list_append (list, pixbuf16);
-		list = g_list_append (list, pixbuf32);
-		list = g_list_append (list, pixbuf128);
-		list = g_list_append (list, pixbuf256);
-		gtk_window_set_default_icon_list(list);
-	}
 
 	/*
 	 * Load the GTK interface.
@@ -148,7 +116,6 @@ void SludgeApplication::saveToFile()
 				      "_Cancel", GTK_RESPONSE_CANCEL,
 				      "_Save", GTK_RESPONSE_ACCEPT,
 				      NULL);
-	gtk_file_chooser_set_do_overwrite_confirmation (GTK_FILE_CHOOSER (dialog), TRUE);
 
 	filter = gtk_file_filter_new();
 	gtk_file_filter_set_name(filter, getFilterName());
@@ -161,13 +128,13 @@ void SludgeApplication::saveToFile()
 	}
 	if (currentFolder[0] != 0)
 	{
-		gtk_file_chooser_set_current_folder (GTK_FILE_CHOOSER (dialog), currentFolder);
+		fileChooserSetCurrentFolder (GTK_FILE_CHOOSER (dialog), currentFolder);
 	}
 
-	if (gtk_dialog_run (GTK_DIALOG (dialog)) == GTK_RESPONSE_ACCEPT)
+	if (runDialog (GTK_DIALOG (dialog)) == GTK_RESPONSE_ACCEPT)
 	{
 		char *filename;
-		filename = gtk_file_chooser_get_filename (GTK_FILE_CHOOSER (dialog));
+		filename = fileChooserGetFilename (GTK_FILE_CHOOSER (dialog));
 		flipBackslashes(&filename);
 
 		if (!saveFile (filename))
@@ -182,7 +149,7 @@ void SludgeApplication::saveToFile()
 
 		g_free (filename);
 	}
-	gtk_widget_destroy (dialog);
+	gtk_window_destroy (GTK_WINDOW (dialog));
 }
 
 gboolean SludgeApplication::reallyClose()
@@ -204,8 +171,8 @@ gboolean SludgeApplication::reallyClose()
 		                    
 		gtk_window_set_title(GTK_WINDOW(dialog), "There are unsaved changes.");
 		    
-		response = gtk_dialog_run (GTK_DIALOG (dialog));
-		gtk_widget_destroy (dialog);
+		response = runDialog (GTK_DIALOG (dialog));
+		gtk_window_destroy (GTK_WINDOW (dialog));
 
 		if (response == GTK_RESPONSE_CANCEL || response == GTK_RESPONSE_NONE) {
 			return FALSE;
@@ -279,7 +246,7 @@ void SludgeApplication::open(char* filename)
 gboolean SludgeApplication::on_window1_delete_event()
 {
 	if (reallyClose()) {
-		gtk_main_quit ();
+		quitMainLoop ();
 		return FALSE;
 	} else {
 		return TRUE;
@@ -318,18 +285,18 @@ void SludgeApplication::on_open()
 
 	if (currentFolder[0] != 0)
 	{
-		gtk_file_chooser_set_current_folder (GTK_FILE_CHOOSER (dialog), currentFolder);
+		fileChooserSetCurrentFolder (GTK_FILE_CHOOSER (dialog), currentFolder);
 	}
 
-	if (gtk_dialog_run (GTK_DIALOG (dialog)) == GTK_RESPONSE_ACCEPT)
+	if (runDialog (GTK_DIALOG (dialog)) == GTK_RESPONSE_ACCEPT)
 	{
 		char *filename;
-		filename = gtk_file_chooser_get_filename (GTK_FILE_CHOOSER (dialog));
+		filename = fileChooserGetFilename (GTK_FILE_CHOOSER (dialog));
 		flipBackslashes(&filename);
 		open(filename);
 		g_free (filename);
 	}
-	gtk_widget_destroy (dialog);
+	gtk_window_destroy (GTK_WINDOW (dialog));
 }
 
 void SludgeApplication::on_save()
@@ -379,4 +346,12 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.",
 							"website", "http://opensludge.github.io",
 							"website-label", "Website",
 							NULL);
+}
+
+void SludgeApplication::setActionEnabled(const char *name, gboolean enabled)
+{
+	if (actionGroup == NULL) return;
+	GAction *action = g_action_map_lookup_action(G_ACTION_MAP(actionGroup), name);
+	if (action != NULL)
+		g_simple_action_set_enabled(G_SIMPLE_ACTION(action), enabled);
 }

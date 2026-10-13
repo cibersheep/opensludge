@@ -24,8 +24,8 @@
 #include <glib-object.h>
 #include <glib.h>
 
-#define GL_GLEXT_PROTOTYPES
-#include <GL/glew.h>
+#include <epoxy/gl.h>
+#include "GLCompat.h"
 
 #include <errno.h>
 #include <sys/types.h>
@@ -42,10 +42,41 @@
 
 #include "SludgeFloorMaker.h"
 
+static void setButtonImageFile(GtkWidget *button, const char *file)
+{
+	if (button == NULL || !GTK_IS_BUTTON(button)) return;
+	gtk_button_set_label(GTK_BUTTON(button), NULL);
+	gtk_button_set_child(GTK_BUTTON(button), gtk_image_new_from_file(file));
+}
+
 SludgeFloorMaker::SludgeFloorMaker()
  : SludgeGLApplication(joinTwoStrings(DATADIR, "FloorMaker.glade"), "floorIcon", "floormaker")
 {
 	if (!initSuccess) return;
+
+	// The mode tool buttons used custom images; restore them.
+	setButtonImageFile(GTK_WIDGET(gtk_builder_get_object(theXml, "define_borders")),
+	                   joinTwoStrings(DATADIR, "floormodeicon1.png"));
+	setButtonImageFile(GTK_WIDGET(gtk_builder_get_object(theXml, "move_vertices")),
+	                   joinTwoStrings(DATADIR, "floormodeicon2.png"));
+	setButtonImageFile(GTK_WIDGET(gtk_builder_get_object(theXml, "delete_vertices")),
+	                   joinTwoStrings(DATADIR, "floormodeicon3.png"));
+	setButtonImageFile(GTK_WIDGET(gtk_builder_get_object(theXml, "split_line")),
+	                   joinTwoStrings(DATADIR, "floormodeicon4.png"));
+	setButtonImageFile(GTK_WIDGET(gtk_builder_get_object(theXml, "split_floor")),
+	                   joinTwoStrings(DATADIR, "floormodeicon5.png"));
+
+	// The backdrop chooser is a plain button now; give it an icon and label.
+	GtkWidget *loadButton = GTK_WIDGET(gtk_builder_get_object(theXml, "filechooserbutton"));
+	if (loadButton != NULL)
+	{
+		GtkWidget *content = gtk_box_new(GTK_ORIENTATION_HORIZONTAL, 6);
+		gtk_box_append(GTK_BOX(content), gtk_image_new_from_icon_name("document-open"));
+		gtk_box_append(GTK_BOX(content), gtk_label_new("Load Backdrop"));
+		gtk_button_set_label(GTK_BUTTON(loadButton), NULL);
+		gtk_button_set_child(GTK_BUTTON(loadButton), content);
+	}
+
 	init(TRUE);
 }
 
@@ -318,22 +349,32 @@ void SludgeFloorMaker::setFloor(struct polyList * floor)
 
 // Callbacks:
 
-void SludgeFloorMaker::on_filechooserbutton_realize(GtkFileChooser *theChooser)
-{	
-	setFileChooserFilters(theChooser, TRUE, TRUE);
+void SludgeFloorMaker::on_load_backdrop_clicked()
+{
+	GtkWidget *dialog;
+	char *filename = NULL;
+	gboolean success = 0;
+
+	dialog = gtk_file_chooser_dialog_new("Load Backdrop",
+				      GTK_WINDOW(theWindow),
+				      GTK_FILE_CHOOSER_ACTION_OPEN,
+				      "_Cancel", GTK_RESPONSE_CANCEL,
+				      "_Open", GTK_RESPONSE_ACCEPT,
+				      NULL);
+
+	setFileChooserFilters(GTK_FILE_CHOOSER (dialog), TRUE, TRUE);
 
 	if (currentFolder[0] != 0)
 	{
-		gtk_file_chooser_set_current_folder(theChooser, currentFolder);
+		fileChooserSetCurrentFolder(GTK_FILE_CHOOSER (dialog), currentFolder);
 	}
-}
 
-void SludgeFloorMaker::on_filechooserbutton_file_set(GtkFileChooser *theChooser)
-{	
-	char *filename;
-	gboolean success = 0;
+	if (runDialog(GTK_DIALOG (dialog)) == GTK_RESPONSE_ACCEPT)
+	{
+		filename = fileChooserGetFilename(GTK_FILE_CHOOSER (dialog));
+	}
+	gtk_window_destroy(GTK_WINDOW (dialog));
 
-    filename = gtk_file_chooser_get_filename(theChooser);
 	if (filename == NULL) return;
 
 	flipBackslashes(&filename);

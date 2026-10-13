@@ -32,6 +32,7 @@ protected:
 public:
 	GtkWidget *theWindow;
 	GtkBuilder *theXml;
+	GSimpleActionGroup *actionGroup;
 	gboolean initSuccess;
 
 
@@ -65,4 +66,5 @@ public:
 	void on_save();
 	void on_save_as();
 	void on_about();
+	void setActionEnabled(const char *name, gboolean enabled);
 };

@@ -60,8 +60,7 @@ public:
 	SludgeFloorMaker();
 	~SludgeFloorMaker();
 	// Callbacks:
-	void on_filechooserbutton_realize(GtkFileChooser *theChooser);
-	void on_filechooserbutton_file_set(GtkFileChooser *theChooser);
+	void on_load_backdrop_clicked();
 	void on_colorbutton_realize(GtkColorButton *theButton);
 	void on_colorbutton_color_set(GtkColorButton *theButton);
 	void on_mode_changed(int buttonClicked);

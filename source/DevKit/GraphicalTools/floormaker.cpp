@@ -10,7 +10,8 @@
 #include <stdio.h>
 #include <stdlib.h>
 //#include <OpenGL/gl.h>
-#include <GL/glew.h>
+#include <epoxy/gl.h>
+#include "GLCompat.h"
 
 #include "floormaker.h"
 #include "interface.h"

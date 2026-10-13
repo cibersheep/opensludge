@@ -40,8 +40,8 @@ AM_CONDITIONAL([COND_WIN32], test x"$WIN32" = xyes)
 
 # Checks for libraries.
 if test "x$enable_devkit" = xyes; then
-  PKG_CHECK_MODULES([GLEW], [glew])
-  PKG_CHECK_MODULES([GTK], [gtk+-3.0 >= 3.16 gthread-2.0 gobject-2.0 gmodule-2.0])
+  PKG_CHECK_MODULES([EPOXY], [epoxy])
+  PKG_CHECK_MODULES([GTK], [gtk4 >= 4.0])
   PKG_CHECK_MODULES([GLIB], [glib-2.0])
   PKG_CHECK_MODULES([LIBPNG], [libpng])
 fi

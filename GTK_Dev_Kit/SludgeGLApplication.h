@@ -26,7 +26,7 @@ private:
 	int mouseLoc2x, mouseLoc2y;
 	gboolean haveStatusbar;
 	gboolean glInitialized;
-	GtkToolButton *zoom100Button, *zoomFitButton;
+	GtkWidget *zoom100Button, *zoomFitButton;
 	GtkWidget *statusbarWidget;
 	GtkLabel *cursorxLabel, *cursoryLabel, *picwLabel, *pichLabel, *zmulLabel;
 	GMutex theRender_mutex;
@@ -39,6 +39,7 @@ protected:
 
 public:
 	GtkWidget *theDrawingarea;
+	double pointerx, pointery;
 
 
 private:
@@ -69,13 +70,12 @@ public:
 	void on_drawingarea1_realize(GtkWidget *theWidget);
 	gboolean on_drawingarea1_render(GtkWidget *theWidget, GdkGLContext *context);
 	gboolean render_timer_event(gpointer theUser_data);
-	gboolean on_drawingarea1_scroll_event(GtkWidget *theWidget, GdkEventScroll *theEvent);
-	gboolean on_drawingarea1_button_press_event(GtkWidget *theWidget, GdkEventButton *theEvent);
-	gboolean on_drawingarea1_button_release_event(GtkWidget *theWidget, GdkEventButton *theEvent);
-	gboolean on_drawingarea1_motion_notify_event(GtkWidget *theWidget, GdkEventMotion *theEvent);
-	gboolean on_drawingarea1_leave_notify_event(GtkWidget *theWidget, GdkEventAny *theEvent);
-	void on_zoom_100_realize(GtkToolButton *theButton);
-	void on_zoom_fit_realize(GtkToolButton *theButton);
+	// Input, driven by the event controllers installed in the constructor.
+	void doButtonPress(int button, double pointx, double pointy, GdkModifierType state);
+	void doButtonRelease(int button, double pointx, double pointy, GdkModifierType state);
+	void doMotion(double pointx, double pointy, GdkModifierType state);
+	void doLeave();
+	void doScroll(double deltaY);
 	void on_zoom_100_clicked();
 	void on_zoom_fit_clicked();
 };

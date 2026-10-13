@@ -59,7 +59,6 @@ private:
 
 	GtkNotebook *notebook;
 
-	GtkWidget *saveItem, *saveAsItem, *projectPropertiesItem, *projectCompileItem, *projectRunGameItem;
 	GtkWidget *addFileButton, *removeFileButton;
 
 	GtkDialog *compilerDialog;
@@ -71,10 +70,10 @@ private:
 	GtkDialog *projectSettingsDialog;
 	GtkEntry *prefName, *prefQuit, *prefSave, *prefLanguage, *prefFilename, *prefIcon, *prefLogo;
 	GtkSpinButton *prefWidth, *prefHeight, *prefSpeed;
-	GtkToggleButton *prefSilent;
+	GtkCheckButton *prefSilent;
 
 	GtkDialog *preferenceDialog;
-	GtkToggleButton *prefKeepImages, *prefWriteStrings, *prefVerbose;
+	GtkCheckButton *prefKeepImages, *prefWriteStrings, *prefVerbose;
 	GtkEntry *prefEditor, *prefImageViewer, *prefAudioPlayer, *prefModPlayer;
 
 public:

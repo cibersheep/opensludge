@@ -7,6 +7,7 @@
 #include "sprites.h"
 #include "moreio.h"
 #include "interface.h"
+#include "GLCompat.h"
 
 void forgetSpriteBank (spriteBank * forgetme) {
 	unsigned int index;
@@ -424,30 +425,17 @@ bool NPOT_textures = false;
 
 void NPOT_check() {
 	/* Check for graphics capabilities... */
-	if (GLEW_VERSION_2_0) {
+	if (epoxy_gl_version() >= 20) {
 		// Yes! Textures can be any size!
 		NPOT_textures = true;
-		fprintf (stderr, "OpenGL 2.0! All is good.\n");
 	} else {
-		if (GLEW_VERSION_1_5) {
-			fprintf (stderr, "OpenGL 1.5!\n");
-		}
-		else if (GLEW_VERSION_1_4) {
-			fprintf (stderr, "OpenGL 1.4!\n");
-		}
-		else if (GLEW_VERSION_1_3) {
-			fprintf (stderr, "OpenGL 1.3!\n");
-		}
-		else if (GLEW_VERSION_1_2) {
-			fprintf (stderr, "OpenGL 1.2!\n");
-		}
-		if (GLEW_ARB_texture_non_power_of_two) {
+		if (epoxy_has_gl_extension("GL_ARB_texture_non_power_of_two")) {
 			// Yes! Textures can be any size!
 			NPOT_textures = true;
 		} else {
 			// Workaround needed for lesser graphics cards. Let's hope this works...
 			NPOT_textures = false;
-			fprintf (stderr, "Warning: Old graphics card! GLEW_ARB_texture_non_power_of_two not supported.\n");
+			fprintf (stderr, "Warning: Old graphics card! NPOT textures not supported.\n");
 		}
 	}
 }

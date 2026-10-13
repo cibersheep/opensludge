@@ -50,35 +50,9 @@ extern "C" {
 
 // SludgeApplication callbacks:
 
-G_MODULE_EXPORT gboolean on_window1_delete_event(GtkWidget *theWidget, GdkEvent *theEvent, gpointer theUser_data)
+G_MODULE_EXPORT gboolean on_window1_close_request(GtkWindow *theWindow, gpointer theUser_data)
 {
 	return translationEditor->on_window1_delete_event();
-}
-
-G_MODULE_EXPORT void on_new(GtkMenuItem *theItem, gpointer theUser_data)
-{
-	translationEditor->on_new();
-}
-
-G_MODULE_EXPORT void on_open(GtkMenuItem *theItem, gpointer theUser_data)
-{
-	translationEditor->on_open();
-}
-
-G_MODULE_EXPORT void on_save(GtkMenuItem *theItem, gpointer theUser_data)
-{
-	translationEditor->on_save();
-}
-
-G_MODULE_EXPORT void on_save_as(GtkMenuItem *theItem, gpointer theUser_data)
-{
-	translationEditor->on_save_as();
-}
-
-G_MODULE_EXPORT void
-on_about(GtkMenuItem *theItem, gpointer theUser_data)
-{
-	translationEditor->on_about();
 }
 
 // SludgeTranslationEditor callbacks:
@@ -142,6 +116,53 @@ G_MODULE_EXPORT gboolean searchEqualFunc_cb(GtkTreeModel *model, gint column, co
 }
 #endif
 
+// Menu actions:
+
+static void action_new(GSimpleAction *action, GVariant *parameter, gpointer user_data)
+{
+	translationEditor->on_new();
+}
+
+static void action_open(GSimpleAction *action, GVariant *parameter, gpointer user_data)
+{
+	translationEditor->on_open();
+}
+
+static void action_save(GSimpleAction *action, GVariant *parameter, gpointer user_data)
+{
+	translationEditor->on_save();
+}
+
+static void action_save_as(GSimpleAction *action, GVariant *parameter, gpointer user_data)
+{
+	translationEditor->on_save_as();
+}
+
+static void action_load_strings(GSimpleAction *action, GVariant *parameter, gpointer user_data)
+{
+	translationEditor->on_load_strings_clicked();
+}
+
+static void action_quit(GSimpleAction *action, GVariant *parameter, gpointer user_data)
+{
+	translationEditor->on_window1_delete_event();
+}
+
+static void action_about(GSimpleAction *action, GVariant *parameter, gpointer user_data)
+{
+	translationEditor->on_about();
+}
+
+static const GActionEntry translationEditorActions[] = {
+	{ "new",          action_new,          NULL, NULL, NULL },
+	{ "open",         action_open,         NULL, NULL, NULL },
+	{ "save",         action_save,         NULL, NULL, NULL },
+	{ "save-as",      action_save_as,      NULL, NULL, NULL },
+	{ "load-strings", action_load_strings, NULL, NULL, NULL },
+	{ "quit",         action_quit,         NULL, NULL, NULL },
+	{ "about",        action_about,        NULL, NULL, NULL },
+};
+
 void printCmdlineUsage() {
 	fprintf(stdout, "SLUDGE Project Manager, usage: sludge-projectmanager <project file>\n");
 }
@@ -197,19 +218,24 @@ main(int argc, char *argv[])
 	/*
 	 * Init GTK+.
 	 */
-	gtk_init(&argc, &argv);
+	gtk_init();
 
 	translationEditor = new SludgeTranslationEditor();
 
 	/*
 	 * Get the window manager to connect any assigned signals in the loaded Glade file to our coded functions.
 	 */
-	gtk_builder_connect_signals(translationEditor->theXml, NULL);
 
-	/*
-	 * Show the window.
-	 */
-	gtk_widget_show(translationEditor->theWindow);
+	// Make the menu bar actions available to the window.
+	GSimpleActionGroup *actionGroup = g_simple_action_group_new();
+	g_action_map_add_action_entries(G_ACTION_MAP(actionGroup), translationEditorActions,
+	                                G_N_ELEMENTS(translationEditorActions), NULL);
+	gtk_widget_insert_action_group(translationEditor->theWindow, "win", G_ACTION_GROUP(actionGroup));
+	translationEditor->actionGroup = actionGroup;
+
+	// Realize the window first, so that the tree view creates its model
+	// before a translation is loaded into it.
+	gtk_window_present(GTK_WINDOW(translationEditor->theWindow));
 
 	if (openThisFile != NULL) {
 		translationEditor->open(openThisFile);
@@ -217,7 +243,7 @@ main(int argc, char *argv[])
 
 	// Run the window manager loop.
 	if (translationEditor->initSuccess)
-		gtk_main ();
+		runMainLoop(translationEditor->theWindow);
 
 	delete translationEditor;
 

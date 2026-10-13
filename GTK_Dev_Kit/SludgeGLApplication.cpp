@@ -24,8 +24,8 @@
 #include <glib-object.h>
 #include <glib.h>
 
-#define GL_GLEXT_PROTOTYPES
-#include <GL/glew.h>
+#include <epoxy/gl.h>
+#include "GLCompat.h"
 
 #include <errno.h>
 #include <sys/types.h>
@@ -36,6 +36,59 @@
 
 #include "SludgeGLApplication.h"
 
+/*
+ * GTK 4 delivers input through event controllers rather than widget signals, so
+ * these trampolines translate the controller callbacks to the application.
+ */
+static void on_area_enter(GtkEventControllerMotion *controller, double x, double y, gpointer data)
+{
+	SludgeGLApplication *app = (SludgeGLApplication *) data;
+	app->pointerx = x;
+	app->pointery = y;
+}
+
+static void on_area_motion(GtkEventControllerMotion *controller, double x, double y, gpointer data)
+{
+	SludgeGLApplication *app = (SludgeGLApplication *) data;
+	GdkModifierType state = gtk_event_controller_get_current_event_state(GTK_EVENT_CONTROLLER(controller));
+	app->pointerx = x;
+	app->pointery = y;
+	app->doMotion(x, y, state);
+}
+
+static void on_area_leave(GtkEventControllerMotion *controller, gpointer data)
+{
+	((SludgeGLApplication *) data)->doLeave();
+}
+
+static gboolean on_area_scroll(GtkEventControllerScroll *controller, double dx, double dy, gpointer data)
+{
+	((SludgeGLApplication *) data)->doScroll(dy);
+	return TRUE;
+}
+
+static void setButtonIcon(GtkWidget *button, const char *iconName)
+{
+	if (button == NULL || !GTK_IS_BUTTON(button)) return;
+	gtk_button_set_label(GTK_BUTTON(button), NULL);
+	gtk_button_set_icon_name(GTK_BUTTON(button), iconName);
+}
+
+static void on_area_pressed(GtkGestureClick *gesture, int n_press, double x, double y, gpointer data)
+{
+	SludgeGLApplication *app = (SludgeGLApplication *) data;
+	GdkModifierType state = gtk_event_controller_get_current_event_state(GTK_EVENT_CONTROLLER(gesture));
+	app->pointerx = x;
+	app->pointery = y;
+	app->doButtonPress(gtk_gesture_single_get_current_button(GTK_GESTURE_SINGLE(gesture)), x, y, state);
+}
+
+static void on_area_released(GtkGestureClick *gesture, int n_press, double x, double y, gpointer data)
+{
+	SludgeGLApplication *app = (SludgeGLApplication *) data;
+	GdkModifierType state = gtk_event_controller_get_current_event_state(GTK_EVENT_CONTROLLER(gesture));
+	app->doButtonRelease(gtk_gesture_single_get_current_button(GTK_GESTURE_SINGLE(gesture)), x, y, state);
+}
 
 SludgeGLApplication::SludgeGLApplication(const char * gladeFileName, const char * iconName, const char * configFile)
  : SludgeApplication(gladeFileName, iconName, configFile)
@@ -50,12 +103,13 @@ SludgeGLApplication::SludgeGLApplication(const char * gladeFileName, const char 
 	picwLabel = GTK_LABEL (gtk_builder_get_object (theXml, "picw_label"));
 	pichLabel = GTK_LABEL (gtk_builder_get_object (theXml, "pich_label"));
 	zmulLabel = GTK_LABEL (gtk_builder_get_object (theXml, "zmul_label"));
-	zoom100Button = NULL;
-	zoomFitButton = NULL;
+	zoom100Button = GTK_WIDGET (gtk_builder_get_object (theXml, "zoom_100"));
+	zoomFitButton = GTK_WIDGET (gtk_builder_get_object (theXml, "zoom_fit"));
 
 	awaitButton1Release = FALSE;
 	awaitButton2Release = FALSE;
 
+	pointerx = pointery = 0.;
 	x = y = w = h = 0;
 
 	theDrawingarea = GTK_WIDGET (gtk_builder_get_object (theXml, "drawingarea1"));
@@ -70,8 +124,32 @@ SludgeGLApplication::SludgeGLApplication(const char * gladeFileName, const char 
 	// Configure the OpenGL drawing area. GtkGLArea creates and manages the
 	// context, and swaps the buffers after every render.
 	gtk_gl_area_set_has_depth_buffer (GTK_GL_AREA (theDrawingarea), TRUE);
-	gtk_gl_area_set_has_alpha (GTK_GL_AREA (theDrawingarea), TRUE);
 	gtk_gl_area_set_auto_render (GTK_GL_AREA (theDrawingarea), TRUE);
+	// The renderer uses desktop OpenGL features; do not let GDK pick GLES.
+	gtk_gl_area_set_allowed_apis (GTK_GL_AREA (theDrawingarea), GDK_GL_API_GL);
+
+	// Install the input controllers (button, motion and scroll).
+	GtkGesture *clickController = gtk_gesture_click_new();
+	gtk_gesture_single_set_button (GTK_GESTURE_SINGLE (clickController), 0);
+	g_signal_connect (clickController, "pressed", G_CALLBACK (on_area_pressed), this);
+	g_signal_connect (clickController, "released", G_CALLBACK (on_area_released), this);
+	gtk_widget_add_controller (theDrawingarea, GTK_EVENT_CONTROLLER (clickController));
+
+	GtkEventController *motionController = gtk_event_controller_motion_new();
+	g_signal_connect (motionController, "enter", G_CALLBACK (on_area_enter), this);
+	g_signal_connect (motionController, "motion", G_CALLBACK (on_area_motion), this);
+	g_signal_connect (motionController, "leave", G_CALLBACK (on_area_leave), this);
+	gtk_widget_add_controller (theDrawingarea, motionController);
+
+	GtkEventController *scrollController = gtk_event_controller_scroll_new (
+		(GtkEventControllerScrollFlags) (GTK_EVENT_CONTROLLER_SCROLL_VERTICAL | GTK_EVENT_CONTROLLER_SCROLL_DISCRETE));
+	g_signal_connect (scrollController, "scroll", G_CALLBACK (on_area_scroll), this);
+	gtk_widget_add_controller (theDrawingarea, scrollController);
+
+	// The legacy tool buttons showed icons only; restore them now that the
+	// toolbar is built from plain buttons.
+	setButtonIcon (zoom100Button, "zoom-original");
+	setButtonIcon (zoomFitButton, "zoom-fit-best");
 
 	// Initialise the render mutex.
 	g_mutex_init (&theRender_mutex);
@@ -124,7 +202,7 @@ void SludgeGLApplication::showStatusbar(int picwidth, int picheight)
 	gtk_label_set_text (pichLabel, buf);
 	refreshStatusbarCursor(0, 0);
 	refreshStatusbarZmul();
-	gtk_widget_show_all(statusbarWidget);
+	gtk_widget_set_visible(statusbarWidget, TRUE);
 }
 
 void SludgeGLApplication::refreshStatusbarCursor(int local_pointx, int local_pointy)
@@ -149,7 +227,7 @@ void SludgeGLApplication::refreshStatusbarZmul()
 
 void SludgeGLApplication::hideStatusbar()
 {
-	gtk_widget_hide(statusbarWidget);
+	gtk_widget_set_visible(statusbarWidget, FALSE);
 }
 
 void SludgeGLApplication::reshape()
@@ -171,7 +249,7 @@ void SludgeGLApplication::reshape()
 }
 
 /*
- * Make sure the OpenGL context exists and is current, initialise GLEW and let
+ * Make sure the OpenGL context exists and is current, initialise the shim and let
  * the application set up its OpenGL state. Nothing happens until the widget is
  * realized and its context is available; instead the work is deferred to the
  * first "render" signal.
@@ -185,13 +263,7 @@ void SludgeGLApplication::initGL()
 	gtk_gl_area_make_current (GTK_GL_AREA (theDrawingarea));
 	if (gtk_gl_area_get_error (GTK_GL_AREA (theDrawingarea)) != NULL) return;
 
-	GLenum glewErr = glewInit();
-	if (GLEW_OK != glewErr)
-	{
-		g_critical ("Couldn't initialize GLEW.\n");
-		return;
-	}
-
+	compatInit();
 	prepareOpenGL();
 	glInitialized = TRUE;
 }
@@ -222,14 +294,6 @@ void SludgeGLApplication::setCoords()
 
 void SludgeGLApplication::on_drawingarea1_realize(GtkWidget *theWidget)
 {
-	if (gtk_widget_get_window (theWidget) == NULL)
-	{
-		return;
-	}
-
-	gtk_widget_add_events(theWidget, GDK_BUTTON_PRESS_MASK | GDK_BUTTON_RELEASE_MASK
-					 | GDK_LEAVE_NOTIFY_MASK | GDK_POINTER_MOTION_MASK | GDK_POINTER_MOTION_HINT_MASK | GDK_SCROLL_MASK);  
-
 	// Set up OpenGL now if the context is already available.
 	initGL();
 }
@@ -240,7 +304,7 @@ void SludgeGLApplication::on_drawingarea1_realize(GtkWidget *theWidget)
  */
 gboolean SludgeGLApplication::on_drawingarea1_render(GtkWidget *theWidget, GdkGLContext *context)
 {
-	// First frame: initialise GLEW and the application's OpenGL state.
+	// First frame: initialise the compatibility layer and OpenGL state.
 	initGL();
 
 	/*
@@ -283,20 +347,13 @@ gboolean SludgeGLApplication::render_timer_event(gpointer theUser_data)
 	return TRUE;
 }
 
-gboolean SludgeGLApplication::on_drawingarea1_scroll_event(GtkWidget *theWidget, GdkEventScroll *theEvent)
+void SludgeGLApplication::doScroll(double deltaY)
 {
-	float deltaY;
-	if (theEvent->direction == GDK_SCROLL_UP) {
-		deltaY = -1.;
-	}
-	if (theEvent->direction == GDK_SCROLL_DOWN) {
-		deltaY = 1.;
-	}
 	double x1, y1;
 	int local_pointx, local_pointy;
-	
-	local_pointx = theEvent->x;
-	local_pointy = theEvent->y;
+
+	local_pointx = (int) pointerx;
+	local_pointy = (int) pointery;
 	x1 = zmul*(local_pointx+x);
 	y1 = -zmul*(local_pointy-y);
 
@@ -307,34 +364,28 @@ gboolean SludgeGLApplication::on_drawingarea1_scroll_event(GtkWidget *theWidget,
 
 	setCoords();
 	render_timer_event(theDrawingarea);
-
-	return FALSE;
 }
 
-gboolean SludgeGLApplication::on_drawingarea1_button_press_event
-(GtkWidget *theWidget, GdkEventButton *theEvent)
+void SludgeGLApplication::doButtonPress(int button, double pointx, double pointy, GdkModifierType state)
 {
-	if (theEvent->button == 1) {
-		button1Press (theEvent->x, theEvent->y);
+	if (button == 1) {
+		button1Press ((int) pointx, (int) pointy);
 	}
 	else
 	{
-		mouseLoc2x = theEvent->x;
-		mouseLoc2y = theEvent->y;
-		awaitButton2Release = TRUE;	
+		mouseLoc2x = (int) pointx;
+		mouseLoc2y = (int) pointy;
+		awaitButton2Release = TRUE;
 	}
-
-    return FALSE;
 }
 
-gboolean SludgeGLApplication::on_drawingarea1_button_release_event
-(GtkWidget *theWidget, GdkEventButton *theEvent)
+void SludgeGLApplication::doButtonRelease(int button, double pointx, double pointy, GdkModifierType state)
 {
-	if ( !((awaitButton1Release && theEvent->button == 1) || awaitButton2Release) ) return FALSE;
+	if ( !((awaitButton1Release && button == 1) || awaitButton2Release) ) return;
 
-	if (theEvent->button == 1) 
+	if (button == 1)
 	{
-		button1Release (theEvent->x, theEvent->y);
+		button1Release ((int) pointx, (int) pointy);
 	}
 	else
 	{
@@ -342,22 +393,19 @@ gboolean SludgeGLApplication::on_drawingarea1_button_release_event
 	}
 
 	render_timer_event(theDrawingarea);
-
-    return FALSE;
 }
 
-gboolean SludgeGLApplication::on_drawingarea1_motion_notify_event
-(GtkWidget *theWidget, GdkEventMotion *theEvent)
+void SludgeGLApplication::doMotion(double pointx, double pointy, GdkModifierType state)
 {
-	refreshStatusbarCursor(theEvent->x, theEvent->y);
+	refreshStatusbarCursor((int) pointx, (int) pointy);
 
-	if ( (awaitButton1Release && theEvent->state & GDK_BUTTON1_MASK) || awaitButton2Release )
+	if ( (awaitButton1Release && state & GDK_BUTTON1_MASK) || awaitButton2Release )
 	{
 		int local_pointx, local_pointy;
-		local_pointx = theEvent->x;
-		local_pointy = theEvent->y;
+		local_pointx = (int) pointx;
+		local_pointy = (int) pointy;
 
-		if (theEvent->state & GDK_BUTTON1_MASK)
+		if (state & GDK_BUTTON1_MASK)
 		{
 			button1Motion (local_pointx, local_pointy);
 		}
@@ -369,38 +417,19 @@ gboolean SludgeGLApplication::on_drawingarea1_motion_notify_event
 			y = y1 + (local_pointy - mouseLoc2y);
 
 			setCoords();
-			mouseLoc2x = theEvent->x;
-			mouseLoc2y = theEvent->y;
+			mouseLoc2x = (int) pointx;
+			mouseLoc2y = (int) pointy;
 		}
 		render_timer_event(theDrawingarea);
 	}
-
-	gdk_event_request_motions (theEvent);
-
-    return FALSE;
 }
 
-gboolean SludgeGLApplication::on_drawingarea1_leave_notify_event
-(GtkWidget *theWidget, GdkEventAny *theEvent)
+void SludgeGLApplication::doLeave()
 {
 	awaitButton1Release = FALSE;
 	awaitButton2Release = FALSE;
 
 	drawingareaLeft ();
-
-    return FALSE;
-}
-
-void SludgeGLApplication::on_zoom_100_realize (GtkToolButton *theButton)
-{
-	gtk_widget_set_sensitive (GTK_WIDGET(theButton), FALSE);
-	zoom100Button = theButton;
-}
-
-void SludgeGLApplication::on_zoom_fit_realize (GtkToolButton *theButton)
-{
-	gtk_widget_set_sensitive (GTK_WIDGET(theButton), FALSE);
-	zoomFitButton = theButton;
 }
 
 void SludgeGLApplication::on_zoom_100_clicked ()

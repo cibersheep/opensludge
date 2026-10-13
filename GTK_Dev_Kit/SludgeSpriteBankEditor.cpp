@@ -24,8 +24,8 @@
 #include <glib-object.h>
 #include <glib.h>
 
-#define GL_GLEXT_PROTOTYPES
-#include <GL/glew.h>
+#include <epoxy/gl.h>
+#include "GLCompat.h"
 
 #include <errno.h>
 #include <sys/types.h>
@@ -50,9 +50,9 @@ SludgeSpriteBankEditor::SludgeSpriteBankEditor()
 	theXAdjustment = GTK_ADJUSTMENT (gtk_builder_get_object(theXml, "x_adjustment"));
 	theYAdjustment = GTK_ADJUSTMENT (gtk_builder_get_object(theXml, "y_adjustment"));
 	theNumSpritesLabel = GTK_LABEL (gtk_builder_get_object(theXml, "num_sprites_label"));
-	modePalButton[0] = GTK_TOGGLE_BUTTON (gtk_builder_get_object(theXml, "mode_pal_open"));
-	modePalButton[1] = GTK_TOGGLE_BUTTON (gtk_builder_get_object(theXml, "mode_pal_closed"));
-	modePalButton[2] = GTK_TOGGLE_BUTTON (gtk_builder_get_object(theXml, "mode_pal_none"));
+	modePalButton[0] = GTK_CHECK_BUTTON (gtk_builder_get_object(theXml, "mode_pal_open"));
+	modePalButton[1] = GTK_CHECK_BUTTON (gtk_builder_get_object(theXml, "mode_pal_closed"));
+	modePalButton[2] = GTK_CHECK_BUTTON (gtk_builder_get_object(theXml, "mode_pal_none"));
 	insertButton = GTK_WIDGET (gtk_builder_get_object(theXml, "insert_sprite"));
 	deleteButton = GTK_WIDGET (gtk_builder_get_object(theXml, "delete_sprite"));
 	exportButton = GTK_WIDGET (gtk_builder_get_object(theXml, "export_sprite"));
@@ -280,20 +280,20 @@ void SludgeSpriteBankEditor::setupPalButtons()
 		if (sprites.type < 2) {
 			sprites.type = 1;
 			ignoreModePalButtons = TRUE;
-			gtk_toggle_button_set_active(modePalButton[1], TRUE);
+			gtk_check_button_set_active(modePalButton[1], TRUE);
 			ignoreModePalButtons = FALSE;
 			gtk_widget_set_sensitive(GTK_WIDGET(modePalButton[0]), TRUE);
 			gtk_widget_set_sensitive(GTK_WIDGET(modePalButton[1]), TRUE);
 		} else {
 			ignoreModePalButtons = TRUE;
-			gtk_toggle_button_set_active(modePalButton[2], TRUE);
+			gtk_check_button_set_active(modePalButton[2], TRUE);
 			ignoreModePalButtons = FALSE;
 			gtk_widget_set_sensitive(GTK_WIDGET(modePalButton[0]), FALSE);
 			gtk_widget_set_sensitive(GTK_WIDGET(modePalButton[1]), FALSE);
 		}
 	} else {
 		ignoreModePalButtons = TRUE;
-		gtk_toggle_button_set_active(modePalButton[0], TRUE);
+		gtk_check_button_set_active(modePalButton[0], TRUE);
 		ignoreModePalButtons = FALSE;
 		gtk_widget_set_sensitive(GTK_WIDGET(modePalButton[0]), TRUE);
 		gtk_widget_set_sensitive(GTK_WIDGET(modePalButton[1]), FALSE);
@@ -377,14 +377,14 @@ int SludgeSpriteBankEditor::loadSprites(int toIndex, gboolean addNew)
 
 	if (currentFolder[0] != 0)
 	{
-		gtk_file_chooser_set_current_folder(GTK_FILE_CHOOSER (dialog), currentFolder);
+		fileChooserSetCurrentFolder(GTK_FILE_CHOOSER (dialog), currentFolder);
 	}
 
-	if (gtk_dialog_run(GTK_DIALOG (dialog)) == GTK_RESPONSE_ACCEPT)
+	if (runDialog(GTK_DIALOG (dialog)) == GTK_RESPONSE_ACCEPT)
 	{
 		GSList *filenames;
 		char *filename;
-		filenames = gtk_file_chooser_get_filenames(GTK_FILE_CHOOSER (dialog));
+		filenames = fileChooserGetFilenames(GTK_FILE_CHOOSER (dialog));
 
 		for (int j = 0; j < g_slist_length(filenames); j++) {
 
@@ -428,16 +428,16 @@ int SludgeSpriteBankEditor::loadSprites(int toIndex, gboolean addNew)
 		g_free(filename);
 		g_slist_free(filenames);
 	}
-	gtk_widget_destroy(dialog);
+	gtk_window_destroy(GTK_WINDOW (dialog));
 
 	return spritesLoaded;
 }
 
 // Callbacks:
 
-void SludgeSpriteBankEditor::on_show_box_toggled(GtkToggleButton *theButton)
+void SludgeSpriteBankEditor::on_show_box_toggled(GtkCheckButton *theButton)
 {
-	showBox = gtk_toggle_button_get_active(theButton);
+	showBox = gtk_check_button_get_active(theButton);
 	render_timer_event(theDrawingarea);
 }
 
@@ -479,13 +479,13 @@ void SludgeSpriteBankEditor::on_multi_hotspot_clicked()
 	gtk_spin_button_set_value(multiFromSpinButton, 0.);
 	gtk_spin_button_set_value(multiToSpinButton, sprites.total-1);
 
-	if (gtk_dialog_run(multiDialog) == GTK_RESPONSE_OK)
+	if (runDialog(multiDialog) == GTK_RESPONSE_OK)
 	{
 		from = gtk_spin_button_get_value_as_int(multiFromSpinButton);
 		to = gtk_spin_button_get_value_as_int(multiToSpinButton);
 		success = TRUE;
 	}
-	gtk_widget_hide(GTK_WIDGET(multiDialog));
+	gtk_widget_set_visible(GTK_WIDGET(multiDialog), FALSE);
 
 	if (!success) return;
 
@@ -511,14 +511,14 @@ void SludgeSpriteBankEditor::on_mode_pal_clicked(int mode)
 			if (!askAQuestion("Convert sprite bank?", "This will convert your entire sprite bank to 32-bit colour mode. This action can not be reversed. Do you want to proceed?"))
 			{
 				ignoreModePalButtons = TRUE;
-				gtk_toggle_button_set_active(modePalButton[sprites.type], TRUE);
+				gtk_check_button_set_active(modePalButton[sprites.type], TRUE);
 				ignoreModePalButtons = FALSE;
 				return;
 			}
 			if (!convertSpriteBank8to32(&sprites))
 			{
 				ignoreModePalButtons = TRUE;
-				gtk_toggle_button_set_active(modePalButton[sprites.type], TRUE);
+				gtk_check_button_set_active(modePalButton[sprites.type], TRUE);
 				ignoreModePalButtons = FALSE;
 				return;
 			}
@@ -584,7 +584,6 @@ void SludgeSpriteBankEditor::on_export_sprite_clicked()
 				      "_Cancel", GTK_RESPONSE_CANCEL,
 				      "_Save", GTK_RESPONSE_ACCEPT,
 				      NULL);
-	gtk_file_chooser_set_do_overwrite_confirmation(GTK_FILE_CHOOSER (dialog), TRUE);
 
 	setFileChooserFilters(GTK_FILE_CHOOSER (dialog), TRUE, FALSE);
 
@@ -592,13 +591,13 @@ void SludgeSpriteBankEditor::on_export_sprite_clicked()
 
 	if (currentFolder[0] != 0)
 	{
-		gtk_file_chooser_set_current_folder(GTK_FILE_CHOOSER (dialog), currentFolder);
+		fileChooserSetCurrentFolder(GTK_FILE_CHOOSER (dialog), currentFolder);
 	}
 
-	if (gtk_dialog_run(GTK_DIALOG (dialog)) == GTK_RESPONSE_ACCEPT)
+	if (runDialog(GTK_DIALOG (dialog)) == GTK_RESPONSE_ACCEPT)
 	{
 		char *filename;
-		filename = gtk_file_chooser_get_filename(GTK_FILE_CHOOSER (dialog));
+		filename = fileChooserGetFilename(GTK_FILE_CHOOSER (dialog));
 		flipBackslashes(&filename);
 
 		exportToPNG(filename, &sprites, spriteIndex());
@@ -607,7 +606,7 @@ void SludgeSpriteBankEditor::on_export_sprite_clicked()
 
 		g_free(filename);
 	}
-	gtk_widget_destroy(dialog);
+	gtk_window_destroy(GTK_WINDOW (dialog));
 }
 
 void SludgeSpriteBankEditor::on_hscale_value_changed()
@@ -631,12 +630,12 @@ void SludgeSpriteBankEditor::on_fontify()
 
 	gtk_spin_button_set_value(fontifySpinButton, 10.);
 
-	if (gtk_dialog_run(fontifyDialog) == GTK_RESPONSE_OK)
+	if (runDialog(fontifyDialog) == GTK_RESPONSE_OK)
 	{
 		spaceCharWidth = gtk_spin_button_get_value_as_int(fontifySpinButton);
 		success = TRUE;
 	}
-	gtk_widget_hide(GTK_WIDGET(fontifyDialog));
+	gtk_widget_set_visible(GTK_WIDGET(fontifyDialog), FALSE);
 
 	if (!success) return;
 
@@ -651,15 +650,15 @@ void SludgeSpriteBankEditor::on_fontify()
 
 	if (currentFolder[0] != 0)
 	{
-		gtk_file_chooser_set_current_folder(GTK_FILE_CHOOSER (dialog), currentFolder);
+		fileChooserSetCurrentFolder(GTK_FILE_CHOOSER (dialog), currentFolder);
 	}
 
-	if (gtk_dialog_run(GTK_DIALOG (dialog)) == GTK_RESPONSE_ACCEPT)
+	if (runDialog(GTK_DIALOG (dialog)) == GTK_RESPONSE_ACCEPT)
 	{
 		char *filename;
 		success = FALSE;
 
-		filename = gtk_file_chooser_get_filename(GTK_FILE_CHOOSER (dialog));
+		filename = fileChooserGetFilename(GTK_FILE_CHOOSER (dialog));
 		if (filename == NULL) return;
 
 		flipBackslashes(&filename);
@@ -689,7 +688,7 @@ void SludgeSpriteBankEditor::on_fontify()
 
 		g_free(filename);
 	}
-	gtk_widget_destroy(dialog);
+	gtk_window_destroy(GTK_WINDOW (dialog));
 }
 
 void SludgeSpriteBankEditor::on_zoom_100_clicked()

@@ -24,8 +24,7 @@
 #include <glib-object.h>
 #include <glib.h>
 
-#define GL_GLEXT_PROTOTYPES
-#include <GL/glew.h>
+#include <epoxy/gl.h>
 
 #include <errno.h>
 #include <sys/types.h>
@@ -47,35 +46,9 @@ extern "C" {
 
 // SludgeApplication callbacks:
 
-G_MODULE_EXPORT gboolean on_window1_delete_event(GtkWidget *theWidget, GdkEvent *theEvent, gpointer theUser_data)
+G_MODULE_EXPORT gboolean on_window1_close_request(GtkWindow *theWindow, gpointer theUser_data)
 {
 	return zBufferMaker->on_window1_delete_event();
-}
-
-G_MODULE_EXPORT void on_new(GtkMenuItem *theItem, gpointer theUser_data)
-{
-	zBufferMaker->on_new();
-}
-
-G_MODULE_EXPORT void on_open(GtkMenuItem *theItem, gpointer theUser_data)
-{
-	zBufferMaker->on_open();
-}
-
-G_MODULE_EXPORT void on_save(GtkMenuItem *theItem, gpointer theUser_data)
-{
-	zBufferMaker->on_save();
-}
-
-G_MODULE_EXPORT void on_save_as(GtkMenuItem *theItem, gpointer theUser_data)
-{
-	zBufferMaker->on_save_as();
-}
-
-G_MODULE_EXPORT void
-on_about(GtkMenuItem *theItem, gpointer theUser_data)
-{
-	zBufferMaker->on_about();
 }
 
 // SludgeGLApplication callbacks:
@@ -95,66 +68,74 @@ G_MODULE_EXPORT gboolean render_timer_event(gpointer theUser_data)
 	return zBufferMaker->render_timer_event(theUser_data);
 }
 
-G_MODULE_EXPORT gboolean on_drawingarea1_scroll_event(GtkWidget *theWidget, GdkEventScroll *theEvent, gpointer theUser_data)
-{
-	return zBufferMaker->on_drawingarea1_scroll_event(theWidget, theEvent);
-}
-
-G_MODULE_EXPORT gboolean on_drawingarea1_button_press_event(GtkWidget *theWidget, GdkEventButton *theEvent, gpointer theUser_data)
-{
-    return zBufferMaker->on_drawingarea1_button_press_event(theWidget, theEvent);
-}
-
-G_MODULE_EXPORT gboolean on_drawingarea1_button_release_event(GtkWidget *theWidget, GdkEventButton *theEvent, gpointer theUser_data)
-{
-    return zBufferMaker->on_drawingarea1_button_release_event(theWidget, theEvent);
-}
-
-G_MODULE_EXPORT gboolean on_drawingarea1_motion_notify_event(GtkWidget *theWidget, GdkEventMotion *theEvent, gpointer theUser_data)
-{
-    return zBufferMaker->on_drawingarea1_motion_notify_event(theWidget, theEvent);
-}
-
-G_MODULE_EXPORT gboolean on_drawingarea1_leave_notify_event(GtkWidget *theWidget, GdkEventAny *theEvent, gpointer theUser_data)
-{
-    return zBufferMaker->on_drawingarea1_leave_notify_event(theWidget, theEvent);
-}
-
-G_MODULE_EXPORT void on_zoom_100_realize(GtkToolButton *theButton, gpointer theUser_data)
-{
-	zBufferMaker->on_zoom_100_realize(theButton);
-}
-
-G_MODULE_EXPORT void on_zoom_fit_realize(GtkToolButton *theButton, gpointer theUser_data)
-{
-	zBufferMaker->on_zoom_fit_realize(theButton);
-}
-
-G_MODULE_EXPORT void on_zoom_100_clicked(GtkToolButton *theButton, gpointer theUser_data)
+G_MODULE_EXPORT void on_zoom_100_clicked(GtkButton *theButton, gpointer theUser_data)
 {
 	zBufferMaker->on_zoom_100_clicked();
 }
 
-G_MODULE_EXPORT void on_zoom_fit_clicked(GtkToolButton *theButton, gpointer theUser_data)
+G_MODULE_EXPORT void on_zoom_fit_clicked(GtkButton *theButton, gpointer theUser_data)
 {
 	zBufferMaker->on_zoom_fit_clicked();
 }
 
 // SludgeZBufferMaker callbacks:
 
-G_MODULE_EXPORT void on_hscale_value_changed(GtkHScale *theScale, gpointer theUser_data)
+G_MODULE_EXPORT void on_hscale_value_changed(GtkScale *theScale, gpointer theUser_data)
 {
+	if (zBufferMaker == NULL) return;
 	zBufferMaker->on_hscale_value_changed(theScale);
 }
 
 G_MODULE_EXPORT void on_spinbutton_value_changed(GtkSpinButton *theSpinButton, gpointer theUser_data)
 {
+	if (zBufferMaker == NULL) return;
 	zBufferMaker->on_spinbutton_value_changed(theSpinButton);
 }
 
 #ifdef __cplusplus
 }
 #endif
+
+// Menu actions:
+
+static void action_new(GSimpleAction *action, GVariant *parameter, gpointer user_data)
+{
+	zBufferMaker->on_new();
+}
+
+static void action_open(GSimpleAction *action, GVariant *parameter, gpointer user_data)
+{
+	zBufferMaker->on_open();
+}
+
+static void action_save(GSimpleAction *action, GVariant *parameter, gpointer user_data)
+{
+	zBufferMaker->on_save();
+}
+
+static void action_save_as(GSimpleAction *action, GVariant *parameter, gpointer user_data)
+{
+	zBufferMaker->on_save_as();
+}
+
+static void action_quit(GSimpleAction *action, GVariant *parameter, gpointer user_data)
+{
+	zBufferMaker->on_window1_delete_event();
+}
+
+static void action_about(GSimpleAction *action, GVariant *parameter, gpointer user_data)
+{
+	zBufferMaker->on_about();
+}
+
+static const GActionEntry zBufferMakerActions[] = {
+	{ "new",     action_new,     NULL, NULL, NULL },
+	{ "open",    action_open,    NULL, NULL, NULL },
+	{ "save",    action_save,    NULL, NULL, NULL },
+	{ "save-as", action_save_as, NULL, NULL, NULL },
+	{ "quit",    action_quit,    NULL, NULL, NULL },
+	{ "about",   action_about,   NULL, NULL, NULL },
+};
 
 void printCmdlineUsage() {
 	fprintf(stdout, "SLUDGE Z-Buffer Maker, usage: sludge-zbuffermaker <z-buffer file>\n");
@@ -210,19 +191,20 @@ main(int argc, char *argv[])
 	/*
 	 * Init GTK+.
 	 */
-	gtk_init(&argc, &argv);
+	gtk_init();
 
 	zBufferMaker = new SludgeZBufferMaker();
 
 	/*
 	 * Get the window manager to connect any assigned signals in the loaded Glade file to our coded functions.
 	 */
-	gtk_builder_connect_signals(zBufferMaker->theXml, NULL);
 
-	/*
-	 * Show the window.
-	 */
-	gtk_widget_show(zBufferMaker->theWindow);
+	// Make the menu bar actions available to the window.
+	GSimpleActionGroup *actionGroup = g_simple_action_group_new();
+	g_action_map_add_action_entries(G_ACTION_MAP(actionGroup), zBufferMakerActions,
+	                                G_N_ELEMENTS(zBufferMakerActions), NULL);
+	gtk_widget_insert_action_group(zBufferMaker->theWindow, "win", G_ACTION_GROUP(actionGroup));
+	zBufferMaker->actionGroup = actionGroup;
 
 	// Start the render timer.
 	g_timeout_add(10000 / 60, render_timer_event, zBufferMaker->theDrawingarea);
@@ -233,7 +215,7 @@ main(int argc, char *argv[])
 
 	// Run the window manager loop.
 	if (zBufferMaker->initSuccess)
-		gtk_main();
+		runMainLoop(zBufferMaker->theWindow);
 
 	delete zBufferMaker;
 

@@ -20,17 +20,27 @@
 
 #include <gtk/gtk.h>
 
+/* GTK 4 moved the entry text API to GtkEditable. */
+#define gtk_entry_set_text(entry, text) gtk_editable_set_text(GTK_EDITABLE(entry), text)
+#define gtk_entry_get_text(entry) gtk_editable_get_text(GTK_EDITABLE(entry))
+
 #ifdef __cplusplus
 extern "C" {
 #endif
 const char * getTempDir ();
 bool askAQuestion (const char * head, const char * msg);
 bool errorBox (const char * head, const char * msg);
+void runMainLoop(GtkWidget *window);
+void quitMainLoop(void);
 #ifdef __cplusplus
 }
 #endif
 
 void setFileChooserFilters(GtkFileChooser *theFileChooser, gboolean png, gboolean tga);
+int runDialog(GtkDialog *dialog);
+char * fileChooserGetFilename(GtkFileChooser *theChooser);
+GSList * fileChooserGetFilenames(GtkFileChooser *theChooser);
+void fileChooserSetCurrentFolder(GtkFileChooser *theChooser, const char *folder);
 char * joinTwoStrings (const char * a, const char * b);
 bool fileExists(char * file);
 void flipBackslashes(char **string);

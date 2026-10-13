@@ -298,7 +298,7 @@ void SludgeTranslationEditor::on_treeview_realize(GtkTreeView *theTreeView)
 	gtk_tree_view_append_column(theTreeView, translationColumn);
 
 	gtk_tree_view_set_search_equal_func(theTreeView, searchEqualFunc_cb, NULL, NULL);
-	gtk_tree_view_set_search_entry(theTreeView, theSearchEntry);
+	gtk_tree_view_set_search_entry(theTreeView, GTK_EDITABLE(theSearchEntry));
 }
 
 void SludgeTranslationEditor::on_tree_selection_changed(GtkTreeSelection *theSelection)
@@ -468,13 +468,13 @@ void SludgeTranslationEditor::on_load_strings_clicked()
 
 	if (currentFolder[0] != 0)
 	{
-		gtk_file_chooser_set_current_folder(GTK_FILE_CHOOSER (dialog), currentFolder);
+		fileChooserSetCurrentFolder(GTK_FILE_CHOOSER (dialog), currentFolder);
 	}
 
-	if (gtk_dialog_run(GTK_DIALOG (dialog)) == GTK_RESPONSE_ACCEPT)
+	if (runDialog(GTK_DIALOG (dialog)) == GTK_RESPONSE_ACCEPT)
 	{
 		char *filename;
-		filename = gtk_file_chooser_get_filename(GTK_FILE_CHOOSER (dialog));
+		filename = fileChooserGetFilename(GTK_FILE_CHOOSER (dialog));
 		flipBackslashes(&filename);
 
 		if (updateFromProject (filename, &firstTransLine)) {
@@ -484,7 +484,7 @@ void SludgeTranslationEditor::on_load_strings_clicked()
 
 		g_free(filename);
 	}
-	gtk_widget_destroy(dialog);
+	gtk_window_destroy(GTK_WINDOW (dialog));
 }
 
 gboolean SludgeTranslationEditor::searchEqualFunc(GtkTreeModel *model, const gchar *key, GtkTreeIter *iter)

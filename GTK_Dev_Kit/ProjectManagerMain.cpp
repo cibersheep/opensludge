@@ -50,35 +50,9 @@ extern "C" {
 
 // SludgeApplication callbacks:
 
-G_MODULE_EXPORT gboolean on_window1_delete_event(GtkWidget *theWidget, GdkEvent *theEvent, gpointer theUser_data)
+G_MODULE_EXPORT gboolean on_window1_close_request(GtkWindow *theWindow, gpointer theUser_data)
 {
 	return projectManager->on_window1_delete_event();
-}
-
-G_MODULE_EXPORT void on_new(GtkMenuItem *theItem, gpointer theUser_data)
-{
-	projectManager->on_new();
-}
-
-G_MODULE_EXPORT void on_open(GtkMenuItem *theItem, gpointer theUser_data)
-{
-	projectManager->on_open();
-}
-
-G_MODULE_EXPORT void on_save(GtkMenuItem *theItem, gpointer theUser_data)
-{
-	projectManager->on_save();
-}
-
-G_MODULE_EXPORT void on_save_as(GtkMenuItem *theItem, gpointer theUser_data)
-{
-	projectManager->on_save_as();
-}
-
-G_MODULE_EXPORT void
-on_about(GtkMenuItem *theItem, gpointer theUser_data)
-{
-	projectManager->on_about();
 }
 
 // SludgeProjectManager callbacks:
@@ -132,11 +106,6 @@ G_MODULE_EXPORT void on_remove_file_clicked(GtkButton *theButton, gpointer theUs
 	projectManager->on_remove_file_clicked();
 }
 
-G_MODULE_EXPORT void on_compile(GtkMenuItem *theItem, gpointer theUser_data)
-{
-	projectManager->on_compile();
-}
-
 G_MODULE_EXPORT void on_comp_okbutton_clicked(GtkButton *theButton, gpointer theUser_data)
 {
 	projectManager->on_comp_okbutton_clicked(theButton);
@@ -145,36 +114,6 @@ G_MODULE_EXPORT void on_comp_okbutton_clicked(GtkButton *theButton, gpointer the
 G_MODULE_EXPORT void on_comp_gamebutton_clicked(GtkButton *theButton, gpointer theUser_data)
 {
 	projectManager->on_comp_gamebutton_clicked();
-}
-
-G_MODULE_EXPORT void on_project_settings(GtkMenuItem *theItem, gpointer theUser_data)
-{
-	projectManager->on_project_settings();
-}
-
-G_MODULE_EXPORT void on_preferences(GtkMenuItem *theItem, gpointer theUser_data)
-{
-	projectManager->on_preferences();
-}
-
-G_MODULE_EXPORT void on_floormaker_activate(GtkMenuItem *theItem, gpointer theUser_data)
-{
-	projectManager->on_program_activate(FLOORMAKER);
-}
-
-G_MODULE_EXPORT void on_spritebankeditor_activate(GtkMenuItem *theItem, gpointer theUser_data)
-{
-	projectManager->on_program_activate(SPRITEBANKEDITOR);
-}
-
-G_MODULE_EXPORT void on_zbuffermaker_activate(GtkMenuItem *theItem, gpointer theUser_data)
-{
-	projectManager->on_program_activate(ZBUFFERMAKER);
-}
-
-G_MODULE_EXPORT void on_translationeditor_activate(GtkMenuItem *theItem, gpointer theUser_data)
-{
-	projectManager->on_program_activate(TRANSLATIONEDITOR);
 }
 
 G_MODULE_EXPORT void *compile_hook(gpointer nothing)
@@ -195,23 +134,115 @@ void receiveCompilerInfo(compilerInfo *info)
 	g_idle_add(update_compile_window_hook, NULL);
 }
 
-G_MODULE_EXPORT gboolean on_project_settings_dialog_delete_event(GtkWidget *theWidget, GdkEvent  *theEvent, gpointer theUser_data)
+G_MODULE_EXPORT gboolean on_project_settings_dialog_close_request(GtkWindow *theWindow, gpointer theUser_data)
 {
-	return gtk_widget_hide_on_delete(theWidget);
+	gtk_widget_set_visible(GTK_WIDGET(theWindow), FALSE);
+	return TRUE;
 }
 
-G_MODULE_EXPORT gboolean on_preferences_dialog_delete_event(GtkWidget *theWidget, GdkEvent  *theEvent, gpointer theUser_data)
+G_MODULE_EXPORT gboolean on_preferences_dialog_close_request(GtkWindow *theWindow, gpointer theUser_data)
 {
-	return gtk_widget_hide_on_delete(theWidget);
+	gtk_widget_set_visible(GTK_WIDGET(theWindow), FALSE);
+	return TRUE;
 }
 
-G_MODULE_EXPORT gboolean on_compiler_dialog_delete_event(GtkWidget *theWidget, GdkEvent  *theEvent, gpointer theUser_data)
+G_MODULE_EXPORT gboolean on_compiler_dialog_close_request(GtkWindow *theWindow, gpointer theUser_data)
 {
-	return gtk_widget_hide_on_delete(theWidget);
+	gtk_widget_set_visible(GTK_WIDGET(theWindow), FALSE);
+	return TRUE;
 }
 #ifdef __cplusplus
 }
 #endif
+
+// Menu actions:
+
+static void action_new(GSimpleAction *action, GVariant *parameter, gpointer user_data)
+{
+	projectManager->on_new();
+}
+
+static void action_open(GSimpleAction *action, GVariant *parameter, gpointer user_data)
+{
+	projectManager->on_open();
+}
+
+static void action_save(GSimpleAction *action, GVariant *parameter, gpointer user_data)
+{
+	projectManager->on_save();
+}
+
+static void action_save_as(GSimpleAction *action, GVariant *parameter, gpointer user_data)
+{
+	projectManager->on_save_as();
+}
+
+static void action_quit(GSimpleAction *action, GVariant *parameter, gpointer user_data)
+{
+	projectManager->on_window1_delete_event();
+}
+
+static void action_preferences(GSimpleAction *action, GVariant *parameter, gpointer user_data)
+{
+	projectManager->on_preferences();
+}
+
+static void action_project_settings(GSimpleAction *action, GVariant *parameter, gpointer user_data)
+{
+	projectManager->on_project_settings();
+}
+
+static void action_compile(GSimpleAction *action, GVariant *parameter, gpointer user_data)
+{
+	projectManager->on_compile();
+}
+
+static void action_comp_gamebutton(GSimpleAction *action, GVariant *parameter, gpointer user_data)
+{
+	projectManager->on_comp_gamebutton_clicked();
+}
+
+static void action_floormaker(GSimpleAction *action, GVariant *parameter, gpointer user_data)
+{
+	projectManager->on_program_activate(FLOORMAKER);
+}
+
+static void action_spritebankeditor(GSimpleAction *action, GVariant *parameter, gpointer user_data)
+{
+	projectManager->on_program_activate(SPRITEBANKEDITOR);
+}
+
+static void action_zbuffermaker(GSimpleAction *action, GVariant *parameter, gpointer user_data)
+{
+	projectManager->on_program_activate(ZBUFFERMAKER);
+}
+
+static void action_translationeditor(GSimpleAction *action, GVariant *parameter, gpointer user_data)
+{
+	projectManager->on_program_activate(TRANSLATIONEDITOR);
+}
+
+static void action_about(GSimpleAction *action, GVariant *parameter, gpointer user_data)
+{
+	projectManager->on_about();
+}
+
+static const GActionEntry projectManagerActions[] = {
+	{ "new",                 action_new,                 NULL, NULL, NULL },
+	{ "open",                action_open,                NULL, NULL, NULL },
+	{ "save",                action_save,                NULL, NULL, NULL },
+	{ "save-as",             action_save_as,             NULL, NULL, NULL },
+	{ "preferences",         action_preferences,         NULL, NULL, NULL },
+	{ "project-settings",    action_project_settings,    NULL, NULL, NULL },
+	{ "compile",             action_compile,             NULL, NULL, NULL },
+	{ "comp-gamebutton",     action_comp_gamebutton,     NULL, NULL, NULL },
+	{ "floormaker",          action_floormaker,          NULL, NULL, NULL },
+	{ "spritebankeditor",    action_spritebankeditor,    NULL, NULL, NULL },
+	{ "zbuffermaker",        action_zbuffermaker,        NULL, NULL, NULL },
+	{ "translationeditor",   action_translationeditor,   NULL, NULL, NULL },
+	{ "quit",                action_quit,                NULL, NULL, NULL },
+	{ "about",               action_about,               NULL, NULL, NULL },
+};
 
 void printCmdlineUsage() {
 	fprintf(stdout, "SLUDGE Project Manager, usage: sludge-projectmanager <project file>\n");
@@ -268,19 +299,24 @@ main(int argc, char *argv[])
 	/*
 	 * Init GTK+.
 	 */
-	gtk_init(&argc, &argv);
+	gtk_init();
 
 	projectManager = new SludgeProjectManager();
 
 	/*
 	 * Get the window manager to connect any assigned signals in the loaded Glade file to our coded functions.
 	 */
-	gtk_builder_connect_signals(projectManager->theXml, NULL);
 
-	/*
-	 * Show the window.
-	 */
-	gtk_widget_show(projectManager->theWindow);
+	// Make the menu bar actions available to the window.
+	GSimpleActionGroup *actionGroup = g_simple_action_group_new();
+	g_action_map_add_action_entries(G_ACTION_MAP(actionGroup), projectManagerActions,
+	                                G_N_ELEMENTS(projectManagerActions), NULL);
+	gtk_widget_insert_action_group(projectManager->theWindow, "win", G_ACTION_GROUP(actionGroup));
+	projectManager->actionGroup = actionGroup;
+
+	// Realize the window first, so that the tree views create their models
+	// before a project is loaded into them.
+	gtk_window_present(GTK_WINDOW(projectManager->theWindow));
 
 	if (openThisFile != NULL) {
 		projectManager->open(openThisFile);
@@ -288,7 +324,7 @@ main(int argc, char *argv[])
 
 	// Run the window manager loop.
 	if (projectManager->initSuccess)
-		gtk_main ();
+		runMainLoop(projectManager->theWindow);
 
 	delete projectManager;
 
